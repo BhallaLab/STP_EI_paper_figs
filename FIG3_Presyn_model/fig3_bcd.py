@@ -210,11 +210,20 @@ def plotFromKernel( scaleList, stimIdx, kernel, freq, npv, label ):
     ret = np.zeros( int( round( sampleRate * 1.5 ) ) ) 
     ret[int(round(sampleRate* endT )):] += npv[1][1]
     #print( "LK = ", len( kernel ), len( ret ), stimIdx, scaleList )
-    for ss, idx in zip( scaleList, stimIdx ):
+    print( "SHAPE = ", npv.shape )
+    #for ss, idx in zip( scaleList, stimIdx ):
+    for ii in range( len( scaleList ) ):
+        ss = scaleList[ii]
+        idx = stimIdx[ii]
         #idx -= int( round( endT * sampleRate) )
         #print( "SS, IDX = ", ss, idx )
         if idx > 0 :
-            ret[idx:len(kernel)+idx] += kernel * ss
+            ks = kernel * ss
+            if label == "Inh":
+                offset = npv[3,ii] - max( ks + ret[idx:len(kernel)+idx] )
+            else: 
+                offset = npv[3,ii] - min( ks + ret[idx:len(kernel)+idx] )
+            ret[idx:len(kernel)+idx] += ks + offset
 
     t = np.arange( 0.0, 1.0 - 1e-6, 1.0/sampleRate )
     #t2 = np.insert( t, 0, startT )
