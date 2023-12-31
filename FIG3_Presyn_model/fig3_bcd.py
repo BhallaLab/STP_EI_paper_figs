@@ -93,6 +93,14 @@ class DualAlpha():
         plt.legend()
 
 
+def tauFit( kernel, baseline):
+    y = kernel[ int( round(0.05*sampleRate )): ]
+    pk = y[0]
+    x = np.linspace( 0, len(y)/sampleRate, len(y), endpoint = False )
+    ret, cov = sci.curve_fit(lambda t,a,tau: a*np.exp(-t/tau), x, y, p0=(pk-baseline,0.02) )
+    #print( "len = {}, a = {:.4f}, tau = {:4f}, range = {:4f}, bl = {:.4f}".format( len( y ), ret[0], ret[1], pk - baseline, baseline ) )
+    plt.plot( x + startT + 0.05, ret[0] * np.exp( -x/ret[1] ), ":" )
+    return ret
 
 def calcKernel( dat ):
 
@@ -113,13 +121,14 @@ def calcKernel( dat ):
 
 
     if abs( kmax ) > abs( kmin ): # Inhib trace has a positive peak.
-        return kmax, rawKernel, baseline
+        return kmax, rawKernel, baseline, tauFit(rawKernel, baseline)
     else:
-        return kmin, rawKernel, baseline
+        return kmin, rawKernel, baseline, tauFit(rawKernel, baseline)
 
     #plt.plot( t, rawKernel )
 
-def findStpScale( kernel, kpk, ret, si, stimWidth ):
+def findStpScale( kernel, kpk, ret, si, stimWidth, tau ):
+    # ret[0,1] = valley_t, y; ret[1,2] = pk_t, y
     if ret[0] < endT and si < (endT * sampleRate):
         return 1.0
     if kpk < 0 : # Exc
@@ -130,11 +139,15 @@ def findStpScale( kernel, kpk, ret, si, stimWidth ):
     riseIdx = int( round ( (ret[2] - ret[0]) * sampleRate ))
     # This is the kernel change due to the time between valley and peak.
     #print( "riseDelta: ", kpkIdx, stimWidth, riseIdx, kpk )
-    riseDelta = kernel[kpkIdx + stimWidth - riseIdx ] - kernel[kpkIdx + stimWidth]
+    riseDelta1 = kernel[kpkIdx + stimWidth - riseIdx ] - kernel[kpkIdx + stimWidth]
+    riseDelta = ret[1] - ret[1]*np.exp( -(ret[2] - ret[0]) / tau[1] )
+    plt.plot( [ret[2], ret[2]], [-riseDelta + ret[1], ret[3]], "bx-" )
+    #print( "origRiseDelta={:.4f}, new={:.4f}".format( riseDelta1, riseDelta) )
     if ret[0] < endT + 0.01:   # First pulse after ref.
         riseTotal = ret[3] - ret[1]
     else:
         riseTotal = riseDelta + ret[3] - ret[1]
+        #riseTotal = ret[3] - ret[1]
     #print( "si, kpkidx, pkIdx, riseDelta, risetotal = ", int( sampleRate/stimWidth ), si, kpkIdx, pkIdx, riseDelta, riseTotal/kpk )
     return riseTotal / kpk
 
@@ -147,8 +160,7 @@ def findPkVal( dat, freq, startIdx, isExc ):
         # Look for valley preceding this.
         d3 = np.array(dat.iloc[startIdx + imin-stimWidth:imin + startIdx])
         #d3 = np.array(dat.iloc[startIdx:startIdx+stimWidth])
-        print( "Exc startIdx={}, imin = {}, stimWidth = {}, tot={}".format(
-            startIdx, imin, stimWidth, startIdx + imin-stimWidth))
+        #print( "Exc startIdx={}, imin = {}, stimWidth = {}, tot={}".format( startIdx, imin, stimWidth, startIdx + imin-stimWidth))
         imax = np.argmax(d3)
         if imax + imin - stimWidth > imin:
             print( "WARNING: reversal" )
@@ -156,8 +168,7 @@ def findPkVal( dat, freq, startIdx, isExc ):
     else:   # This is the inhibitory input, which has positive currents.
         imax = np.argmax(d2)
         d3 = np.array(dat.iloc[startIdx + imax-stimWidth:imax + startIdx])
-        print( "Inh startIdx={}, imax = {}, stimWidth = {}, tot={}".format(
-            startIdx, imax, stimWidth, startIdx + imax-stimWidth))
+        #print( "Inh startIdx={}, imax = {}, stimWidth = {}, tot={}".format( startIdx, imax, stimWidth, startIdx + imax-stimWidth))
         imin = np.argmin(d3)
         if imax < imin + imax - stimWidth:
             print( "WARNING: reversal" )
@@ -168,10 +179,8 @@ def deconv( dat, freq ):
     stimWidth = int( round( sampleRate/freq ) )
     # Don't reuse stimWidth for stimIdx because of cumulative error.
     stimIdx = [int(startT * sampleRate)] + [ int( round( sampleRate* (endT + i/freq ) ) ) for i in range( 8 ) ]
-    for ss in stimIdx:
-        print( "{:.4f}".format( ss/freq ) )
 
-    kpk, kernel, baseline = calcKernel( dat )
+    kpk, kernel, baseline, tau = calcKernel( dat )
     kpkidx = np.argmax( kernel ) if kpk > 0 else np.argmin( kernel )
 
     scaleList = []
@@ -185,8 +194,8 @@ def deconv( dat, freq ):
         #ret = findPkVal( dat, freq, si, (kpk < 0) )
         pv.append( ret )
         #print( "FindSTPSCALE: ", kpk, ret, si, stimWidth )
-        scale = findStpScale( kernel, kpk, ret, si, stimWidth )
-        print( si, scale )
+        scale = findStpScale( kernel, kpk, ret, si, stimWidth, tau )
+        #print( si, scale )
         scaleList.append( scale )
         if kpk > 0:
             label = "Inh"
