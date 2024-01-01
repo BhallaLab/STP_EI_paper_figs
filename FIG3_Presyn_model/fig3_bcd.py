@@ -14,85 +14,6 @@ endT = 0.5 + OnsetDelay
 runtime = 1.0
 doFigs = True
 
-def alphaFunc( t, tp ):
-    return (t/tp) * np.exp(1-t/tp)
-
-def dualAlphaFunc( t, t1, t2 ):
-    if t < 0:
-        return 0.0
-    if abs( t1 - t2 ) < 1e-6:
-        return alphaFunc( t, t1 )
-    return (1.0/(t1-t2)) * (np.exp(-t/t1) - np.exp(-t/t2))
-
-class Alpha():
-    def __init__( self, kernel ):
-        self.kernel = kernel
-
-    def score( self, params ):
-        lk = len( self.kernel )
-        dt = 1.0/sampleRate
-        alpha = np.array([alphaFunc( i*dt, params[0] ) for i in range(lk)] )
-        delta = alpha - self.kernel
-        return np.dot( delta, delta )
-
-    def fit( self ):
-        initGuess = [0.02]
-        result = sci.minimize( self.score, initGuess, method = "BFGS" )
-        print( "Simple alpha func tp = {:.2f}, score = {:.2f}, initScore = {:.2f}".format( result.x[0], self.score( result.x ), self.score( initGuess ) ) )
-        return result.x[0]
-
-    def plotFit( self, freq ):
-        plt.figure()
-        tp = self.fit()
-        t = np.arange( 0.0, 1.0- 1e-6, 1.0/sampleRate )
-        plt.plot( t[:len(self.kernel)], self.kernel, label="data" )
-        plt.plot( t, [alphaFunc( tt, tp ) for tt in t], label = "fit" )
-        plt.xlabel( "Time (s)" )
-        plt.ylabel( "frac open" )
-        plt.title( "alpha func fit for " + str(freq) + " Hz" )
-        plt.legend()
-
-class DualAlpha():
-    def __init__( self, kernel, delay, power ):
-        self.kernel = kernel
-        self.delay = delay
-        self.power = power
-
-    def scaledAlphaVec( self, t1, t2, length ):
-        dt = 1.0/sampleRate
-        alpha = np.array([dualAlphaFunc( i*dt-self.delay, t1, t2 ) for i in range(length)] )
-        if abs( max( alpha ) ) > 1e-9:
-            alpha = alpha / max( alpha )
-        alpha = np.power( alpha, self.power )
-        return alpha
-
-    def score( self, params ):
-        lk = len( self.kernel )
-        dt = 1.0/sampleRate
-        alpha = self.scaledAlphaVec( params[0], params[1], lk )
-        delta = alpha - self.kernel
-        return np.dot( delta, delta )
-
-    def fit( self ):
-        initGuess = [0.002, 0.02 ]
-        result = sci.minimize( self.score, initGuess, method = "BFGS" )
-        print( "delay={}, power={}, t1 = {:.3f}, t2={:.3f}, score = {:.2f}, initScore = {:.2f}".format(self.delay, self.power, result.x[0], result.x[1], self.score( result.x ), self.score( initGuess ) ) )
-        return result.x
-
-    def plotFit( self, freq ):
-        plt.figure()
-        [t1,t2] = self.fit()
-        t = np.arange( 0.0, 1.0- 1e-6, 1.0/sampleRate )
-        alpha = self.scaledAlphaVec( t1, t2, len(t) )
-        plt.plot( t[:len(self.kernel)], self.kernel, label="data" )
-        plt.plot( t, alpha, label = "fit" )
-        plt.xlabel( "Time (s)" )
-        plt.ylabel( "frac open" )
-        plt.title( "dual alpha func fit for " + str(freq) + " Hz" )
-        plt.title( "dual alpha func freq= {} Hz, delay = {} sec, power = {}".format(freq, self.delay, self.power) )
-        plt.legend()
-
-
 def tauFit( kernel, baseline):
     y = kernel[ int( round(0.05*sampleRate )): ]
     pk = y[0]
@@ -168,7 +89,7 @@ def findPkVal( dat, freq, startIdx, isExc ):
             print( "WARNING: reversal" )
         return [(imin + startIdx+imax - stimWidth )/sampleRate, d3[imin], (startIdx + imax)/sampleRate, d2[imax]]
 
-def deconv( dat, freq ):
+def deconv( dat, freq, ax ):
     startIdx = int( round( endT * sampleRate ) )
     stimWidth = int( round( sampleRate/freq ) )
     # Don't reuse stimWidth for stimIdx because of cumulative error.
@@ -194,10 +115,10 @@ def deconv( dat, freq ):
             label = "Exc"
 
     npv = np.array( pv ).transpose()
-    synthPlot = plotFromKernel(scaleList, stimIdx, kernel, freq, npv, label)
+    synthPlot = plotFromKernel(scaleList, stimIdx, kernel, freq, npv, label, ax)
     return np.array(scaleList), synthPlot, npv
 
-def plotFromKernel( scaleList, stimIdx, kernel, freq, npv, label ):
+def plotFromKernel( scaleList, stimIdx, kernel, freq, npv, label, ax ):
     ret = np.zeros( int( round( sampleRate * 1.5 ) ) ) 
     ret[int(round(sampleRate* endT )):] += npv[1][1]
     for ii in range( len( scaleList ) ):
@@ -213,31 +134,30 @@ def plotFromKernel( scaleList, stimIdx, kernel, freq, npv, label ):
 
     t = np.arange( 0.0, 1.0 - 1e-6, 1.0/sampleRate )
     #plt.plot( t, ret[0:len(t)], ":", label = label + "_est" )
-    plt.plot( npv[0], npv[1], "c*-" )
-    plt.plot( npv[2], npv[3], "y.-" )
+    el1 = None if label == "Inh" else "Troughs"
+    el2 = None if label == "Inh" else "Peaks"
+    ax.plot( npv[0], npv[1], "c*-", label = el1 )
+    ax.plot( npv[2], npv[3], "y.-", label = el2 )
     return ret[:len(t)]
 
 def innerAnalysis( sqDat, freq, pattern, cellNum ):
     numSamples = int( round( sampleRate * runtime ) )
-    #dataStartColumn = len( sqDat.columns ) - 80000 # Was 29, new is 39.
     dataStartColumn = len( sqDat.columns ) - 80000 # Was 29, new is 39.
-    #print( " dataStartColumn = ", dataStartColumn, len( sqDat.columns ), numSamples )
     inh = sqDat.loc[ (sqDat['stimFreq'] == freq) & (sqDat['clampPotential'] > -0.05 ) & (sqDat['patternList'] == pattern ) ]
     exc = sqDat.loc[ (sqDat['stimFreq'] == freq) & (sqDat['clampPotential'] < -0.05 ) & (sqDat['patternList'] == pattern ) ]
-    #print( mypat )
-    #yexc = exc.iloc[:,numSamples + dataStartColumn: 2*numSamples+dataStartColumn]
-    #yinh = inh.iloc[:,numSamples + dataStartColumn: 2*numSamples+dataStartColumn]
     yexc = exc.iloc[:,dataStartColumn: numSamples+dataStartColumn]
     yinh = inh.iloc[:,dataStartColumn: numSamples+dataStartColumn]
     emean = yexc.mean()
     imean = yinh.mean()
-    #print( " LENS = ", len( emean ), len( imean ) )
 
     if doFigs:
-        plt.figure()
+        fig = plt.figure( figsize = (10,12) )
+        gs = fig.add_gridspec( 3, 2 ) # 3 rows, 2 cols
+        plt.rcParams.update({'font.size': 14})
+        ax = fig.add_subplot( gs[0,:] )
     try:
-        ideconv, iSynthPlot, ipv = deconv( imean, freq )
-        edeconv, eSynthPlot, epv = deconv( emean, freq )
+        ideconv, iSynthPlot, ipv = deconv( imean, freq, ax )
+        edeconv, eSynthPlot, epv = deconv( emean, freq, ax )
     except FloatingPointError as error:
         print( "innerAnalysis: freq = {}, pattern = {}, cellNum = {}".format( freq, pattern, cellNum ) )
         raise
@@ -246,32 +166,49 @@ def innerAnalysis( sqDat, freq, pattern, cellNum ):
 
     if doFigs:
         t = np.arange( 0.0, runtime - 1e-6, 1.0/sampleRate )
-        plt.plot( t, imean, "g-", label="Inh" )
-        plt.plot( t, emean, "b-", label="Exc" )
+        ax.plot( t, imean, "g-", label="IPSC" )
+        ax.plot( t, emean, "b-", label="EPSC" )
 
-        plt.xlabel( "Time (s)" )
-        plt.ylabel( "Synaptic current (pA)" )
-        plt.legend()
-        plt.title( "cell {}, Freq = {}".format( cellNum, freq ) )
+        ax.set_xlabel( "Time (s)" )
+        ax.set_ylabel( "Synaptic current (pA)" )
+        ax.set_ylim( -300, 800 )
+        ax.legend( loc="upper left", frameon = False )
+        ax.text( -0.12, 1.05, "A", fontsize = 22, weight = "bold", transform=ax.    transAxes )
+        #ax.title( "cell {}, Freq = {}".format( cellNum, freq ) )
 
-        plt.figure()
+        '''
+        ax = fig.add_subplot( gs[1,0] )
         tr = np.arange( 0.0, len( imean ) - 1e-6, 1.0 ) / sampleRate
-        plt.plot( tr, iSynthPlot - imean, label = "Inh" )
+        ax.plot( tr, iSynthPlot - imean, label = "Inh" )
         tr = np.arange( 0.0, len( emean ) - 1e-6, 1.0 ) / sampleRate
-        plt.plot( tr, eSynthPlot - emean, label = "Exc" )
+        ax.plot( tr, eSynthPlot - emean, label = "Exc" )
 
         plt.xlabel( "Time (s)" )
         plt.ylabel( "Residual (pA)" )
-        plt.legend( position="upper left", frame = False )
+        plt.legend( loc="upper left", frameon = False )
         plt.title( "cell {}, Freq = {}: Residual ".format( cellNum, freq ) )
+        '''
+        ax = fig.add_subplot( gs[1,0] )
+        ax.plot( range( len( ideconv ) ), ideconv/ideconv[0], label="Inh" )
+        ax.plot( range( len( edeconv ) ), edeconv/edeconv[0], label="Exc" )
+        ax.set_xlabel( "Pulse # in burst" )
+        ax.set_ylabel( "Min-to-Max ratio" )
+        ax.legend( loc="upper right", frameon = False )
+        ax.set_ylim( 0, 1.4)
+        ax.text( -0.24, 1.05, "B", fontsize = 22, weight = "bold", transform=ax.    transAxes )
 
-        plt.figure()
-        plt.plot( range( len( ideconv ) ), ideconv/ideconv[0], label="Inh" )
-        plt.plot( range( len( edeconv ) ), edeconv/edeconv[0], label="Exc" )
-        plt.xlabel( "Pulse # in burst" )
-        plt.ylabel( "Synaptic response as ratio to first pulse." )
-        plt.legend()
-        plt.title("cell {}, Freq = {}: Deconv ".format( cellNum, freq) )
+        ax = fig.add_subplot( gs[1,1] )
+        y = ipv[0] - ipv[2]
+        ax.plot( range( len( y ) ), y/y[0], label="Inh" )
+        y = epv[0] - epv[2]
+        ax.plot( range( len( y ) ), y/y[0], label="Exc" )
+        ax.set_xlabel( "Pulse # in burst" )
+        ax.set_ylabel( "Peak-to-Trough ratio" )
+        ax.set_ylim( 0, 1.4)
+        ax.legend( loc="upper right", frameon = False )
+        ax.text( -0.24, 1.05, "C", fontsize = 22, weight = "bold", transform=ax.    transAxes )
+        #ax.title("cell {}, Freq = {}: Deconv ".format( cellNum, freq) )
+        plt.tight_layout()
         plt.show()
 
     finh = np.append( ideconv, ipv ) 
