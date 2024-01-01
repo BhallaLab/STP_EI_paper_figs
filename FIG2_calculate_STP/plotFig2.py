@@ -12,7 +12,6 @@ OnsetDelay = 0.009  # Delay from the light stimulus to onset of syn current
 startT = 0.2 + OnsetDelay
 endT = 0.5 + OnsetDelay
 runtime = 1.0
-doFigs = True
 
 def tauFit( kernel, baseline):
     y = kernel[ int( round(0.05*sampleRate )): ]
@@ -46,7 +45,7 @@ def calcKernel( dat ):
     else:
         return kmin, rawKernel, baseline, tauFit(rawKernel, baseline)
 
-def findStpScale( kernel, kpk, ret, si, stimWidth, tau ):
+def findStpScale( kernel, kpk, ret, si, stimWidth, tau, ax ):
     # ret[0,1] = valley_t, y; ret[1,2] = pk_t, y
     if ret[0] < endT and si < (endT * sampleRate):
         return 1.0
@@ -58,8 +57,9 @@ def findStpScale( kernel, kpk, ret, si, stimWidth, tau ):
     riseIdx = int( round ( (ret[2] - ret[0]) * sampleRate ))
     riseDelta1 = kernel[kpkIdx + stimWidth - riseIdx ] - kernel[kpkIdx + stimWidth]
     riseDelta = ret[1] - ret[1]*np.exp( -(ret[2] - ret[0]) / tau[1] )
-    label = "Min to Max" if (si < 11000 and kpk > 0) else None
-    plt.plot( [ret[2], ret[2]], [-riseDelta + ret[1], ret[3]], "ro-", label = label )
+    if ax:
+        label = "Min to Max" if (si < 11000 and kpk > 0) else None
+        ax.plot( [ret[2], ret[2]], [-riseDelta + ret[1], ret[3]], "ro-", label = label )
     if ret[0] < endT + 0.01:   # First pulse after ref.
         riseTotal = ret[3] - ret[1]
     else:
@@ -107,7 +107,7 @@ def deconv( dat, freq, ax ):
     for si in stimIdx:
         ret = findPkVal( dat, freq, si + kpkidx//2, (kpk < 0) )
         pv.append( ret )
-        scale = findStpScale( kernel, kpk, ret, si, stimWidth, tau )
+        scale = findStpScale( kernel, kpk, ret, si, stimWidth, tau, ax )
         scaleList.append( scale )
         if kpk > 0:
             label = "Inh"
@@ -133,11 +133,11 @@ def plotFromKernel( scaleList, stimIdx, kernel, freq, npv, label, ax ):
             ret[idx:len(kernel)+idx] += ks + offset
 
     t = np.arange( 0.0, 1.0 - 1e-6, 1.0/sampleRate )
-    #plt.plot( t, ret[0:len(t)], ":", label = label + "_est" )
-    el1 = None if label == "Inh" else "Troughs"
-    el2 = None if label == "Inh" else "Peaks"
-    ax.plot( npv[0], npv[1], "c*-", label = el1 )
-    ax.plot( npv[2], npv[3], "y.-", label = el2 )
+    if ax:
+        el1 = None if label == "Inh" else "Troughs"
+        el2 = None if label == "Inh" else "Peaks"
+        ax.plot( npv[0], npv[1], "c*-", label = el1 )
+        ax.plot( npv[2], npv[3], "y.-", label = el2 )
     return ret[:len(t)]
 
 def plotA( ax, imean, emean ):
@@ -171,7 +171,76 @@ def plotC( ax, ipv, epv ):
     ax.legend( loc="upper right", frameon = False )
     ax.text( -0.24, 1.05, "C", fontsize = 22, weight = "bold", transform=ax.    transAxes )
 
-def innerAnalysis( sqDat, freq, pattern, cellNum ):
+def plotDE( ax, sqDat, freq, patternList, panelName ):
+    numSamples = int( round( sampleRate * runtime ) )
+    elabel = "Exc"
+    ilabel = "Inh"
+    for pp in patternList:
+        dataStartColumn = len( sqDat.columns ) - 80000 # Was 29, new is 39.
+        inh = sqDat.loc[ (sqDat['stimFreq'] == freq) & (sqDat['clampPotential'] > -0.05 ) & (sqDat['patternList'] == pp ) ]
+        exc = sqDat.loc[ (sqDat['stimFreq'] == freq) & (sqDat['clampPotential'] < -0.05 ) & (sqDat['patternList'] == pp ) ]
+        yexc = exc.iloc[:,dataStartColumn: numSamples+dataStartColumn]
+        yinh = inh.iloc[:,dataStartColumn: numSamples+dataStartColumn]
+        emean = yexc.mean()
+        imean = yinh.mean()
+        try:
+            ii, iSynthPlot, ipv = deconv( imean, freq, None )
+            ee, eSynthPlot, epv = deconv( emean, freq, None )
+        except FloatingPointError as error:
+            print( "innerAnalysis: freq = {}, pattern = {}, cellNum = {}".format( freq, pattern, cellNum ) )
+            raise
+        ax.plot( range( len( ii ) ), ii/ii[0], "g*-", label=ilabel )
+        ax.plot( range( len( ee ) ), ee/ee[0], "b*-", label=elabel )
+        ilabel = None
+        elabel = None
+    ax.set_xlabel( "Pulse # in burst" )
+    ax.set_ylabel( "Min-to-Max ratio" )
+    ax.legend( loc="upper right", frameon = False )
+    ax.set_ylim( 0, 1.8)
+    ax.text( -0.24, 1.05, panelName, fontsize = 22, weight = "bold", transform=ax.    transAxes )
+
+def plotFG( fig, gs, sqDat, freqList, pattern ):
+    axF = fig.add_subplot( gs[3,0] )
+    axG = fig.add_subplot( gs[3,1] )
+    numSamples = int( round( sampleRate * runtime ) )
+    elabel = "Exc"
+    ilabel = "Inh"
+    for ff in sorted( freqList ):
+        label = "{} Hz".format( ff )
+        dataStartColumn = len( sqDat.columns ) - 80000 # Was 29, new is 39.
+        inh = sqDat.loc[ (sqDat['stimFreq'] == ff) & (sqDat['clampPotential'] > -0.05 ) & (sqDat['patternList'] == pattern ) ]
+        exc = sqDat.loc[ (sqDat['stimFreq'] == ff) & (sqDat['clampPotential'] < -0.05 ) & (sqDat['patternList'] == pattern ) ]
+        yexc = exc.iloc[:,dataStartColumn: numSamples+dataStartColumn]
+        yinh = inh.iloc[:,dataStartColumn: numSamples+dataStartColumn]
+        emean = yexc.mean()
+        imean = yinh.mean()
+        try:
+            ii, iSynthPlot, ipv = deconv( imean, ff, None )
+            ee, eSynthPlot, epv = deconv( emean, ff, None )
+        except FloatingPointError as error:
+            print( "innerAnalysis: freq = {}, pattern = {}, cellNum = {}".format( freq, pattern, cellNum ) )
+            raise
+        #axF.plot( range( len( ii ) ), ii/ii[0], "g*-", label=label )
+        #axG.plot( range( len( ee ) ), ee/ee[0], "b*-", label=label )
+        axF.plot( range( len( ii ) ), ii/ii[0], "*-", label=label )
+        axG.plot( range( len( ee ) ), ee/ee[0], "*-", label=label )
+        ilabel = None
+        elabel = None
+    axF.set_xlabel( "Pulse # in burst" )
+    axF.set_ylabel( "Min-to-Max ratio" )
+    axF.legend( loc="upper right", frameon = False )
+    axF.set_ylim( 0, 1.5)
+    axF.text( -0.24, 1.05, "F", fontsize = 22, weight = "bold", 
+            transform=axF.    transAxes )
+    axG.set_xlabel( "Pulse # in burst" )
+    axG.set_ylabel( "Min-to-Max ratio" )
+    axG.legend( loc="upper right", frameon = False )
+    axG.set_ylim( 0, 1.5)
+    axG.text( -0.24, 1.05, "G", fontsize = 22, weight = "bold", 
+            transform=axG.    transAxes )
+
+
+def innerAnalysis( fig, gs, sqDat, freq, pattern, cellNum ):
     numSamples = int( round( sampleRate * runtime ) )
     dataStartColumn = len( sqDat.columns ) - 80000 # Was 29, new is 39.
     inh = sqDat.loc[ (sqDat['stimFreq'] == freq) & (sqDat['clampPotential'] > -0.05 ) & (sqDat['patternList'] == pattern ) ]
@@ -181,11 +250,7 @@ def innerAnalysis( sqDat, freq, pattern, cellNum ):
     emean = yexc.mean()
     imean = yinh.mean()
 
-    if doFigs:
-        fig = plt.figure( figsize = (10,12) )
-        gs = fig.add_gridspec( 3, 2 ) # 3 rows, 2 cols
-        plt.rcParams.update({'font.size': 14})
-        ax = fig.add_subplot( gs[0,:] )
+    ax = fig.add_subplot( gs[0,:] )
     try:
         ideconv, iSynthPlot, ipv = deconv( imean, freq, ax )
         edeconv, eSynthPlot, epv = deconv( emean, freq, ax )
@@ -195,37 +260,15 @@ def innerAnalysis( sqDat, freq, pattern, cellNum ):
     assert( len( eSynthPlot ) == len( emean ) )
     assert( len( iSynthPlot ) == len( imean ) )
 
-    if doFigs:
-        plotA( ax, imean, emean ) # Complex pattern showing STP estimation
-        plotB( fig.add_subplot( gs[1,0] ), ideconv, edeconv )
-        plotC( fig.add_subplot( gs[1,1] ), ipv, epv )
-        '''
-        ax = fig.add_subplot( gs[1,0] )
-        tr = np.arange( 0.0, len( imean ) - 1e-6, 1.0 ) / sampleRate
-        ax.plot( tr, iSynthPlot - imean, label = "Inh" )
-        tr = np.arange( 0.0, len( emean ) - 1e-6, 1.0 ) / sampleRate
-        ax.plot( tr, eSynthPlot - emean, label = "Exc" )
-
-        plt.xlabel( "Time (s)" )
-        plt.ylabel( "Residual (pA)" )
-        plt.legend( loc="upper left", frameon = False )
-        plt.title( "cell {}, Freq = {}: Residual ".format( cellNum, freq ) )
-        '''
-        '''
-        print( "SHAPE = ", ipv.shape )
-        for ii in range( len( ipv[0] ) ):
-            print( "{}  ipv0={:.4f} ipv2={:.4f}".format( ii, ipv[1,ii], ipv[3,ii] ) )
-        '''
-        #ax.title("cell {}, Freq = {}: Deconv ".format( cellNum, freq) )
-        plt.tight_layout()
-        plt.show()
+    plotA( ax, imean, emean ) # Complex pattern showing STP estimation
+    plotB( fig.add_subplot( gs[1,0] ), ideconv, edeconv )
+    plotC( fig.add_subplot( gs[1,1] ), ipv, epv )
 
     finh = np.append( ideconv, ipv ) 
     fexc = np.append( edeconv, epv )
     return finh, fexc
 
 def main():
-    global doFigs
     parser = argparse.ArgumentParser( description = "This program analyzes Aditya's voltage clamp data from a pandas file" )
     parser.add_argument( "-o", "--output", type = str, help = "Optional: output pandas hdf file for model params, default = STP_pks_and_refs.h5", default = "STP_pks_and_refs.h5")
     args = parser.parse_args()
@@ -240,11 +283,30 @@ def main():
     sqDat = dat.loc[ dat['numSq'] == numSq ]
     freqList = sqDat['stimFreq'].unique()
     patternList = sqDat['patternList'].unique()
+
+
+    ########## Set up graphics #########
+    fig = plt.figure( figsize = (10,15) )
+    gs = fig.add_gridspec( 4, 2 ) # 4 rows, 2 cols
+    plt.rcParams.update({'font.size': 14})
+
+
+    ########## Panels A, B, C  #########
     freq = freqList[0]
     pattern = int( patternList[1] )
-    finh, fexc = innerAnalysis( sqDat, freq, pattern, cellNum )
-    if doFigs:
-        plt.show()
+    finh, fexc = innerAnalysis( fig, gs, sqDat, freq, pattern, cellNum )
+
+    ########## Panel D, E, F, G  #########
+    plotDE( fig.add_subplot( gs[2,0] ), sqDat, freq, patternList, "D" )
+    sqDat15 = dat.loc[ dat['numSq'] == 15 ]
+    patternList15 = sqDat15['patternList'].unique()
+    plotDE( fig.add_subplot( gs[2,1] ), sqDat15, freq, patternList15, "E" )
+
+    plotFG( fig, gs, sqDat, freqList, pattern )
+
+    ########## Wrap up graphics #########
+    plt.tight_layout()
+    plt.show()
 
 if __name__ == "__main__":
     main()
