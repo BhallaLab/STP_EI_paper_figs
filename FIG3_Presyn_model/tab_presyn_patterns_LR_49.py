@@ -15,14 +15,12 @@ hossParams = '"Ca_bind_RR.Kd", "Ca_bind_RR.tau", "docking.Kf", "vesicle_release.
 numHossParams = len( hossParams.split(",") ) + 1
 
 class EvalFunc:
-    def __init__( self, cell, rowList, exc, numSq, pattern, idx, args ):
-        # rowList has an entry for each of the freqs, in order. idx is trial idx.
+    def __init__( self, cell, celldf, exc, numSq, pattern, args ):
         self.cell = int( round( cell ) )
-        self.rowList = rowList
-        self.exc = exc
-        self.numSq = numSq
-        self.pattern = pattern
-        self.idx = idx
+        self.celldf = celldf
+        self.exc = int( round( exc ) )
+        self.numSq = int( round( numSq ) )
+        self.pattern = int( round( pattern ) )
         self.pkDelay = args.peakDelay
         self.presynModelNumber = args.presynModelNumber
         #self.matchMinima = args.matchMinima
@@ -39,44 +37,46 @@ class EvalFunc:
         tpkNames = ['tpk{}'.format(ii) for ii in range(9)]
         valNames = ['val{}'.format(ii) for ii in range(9)]
         tvalNames = ['tval{}'.format(ii) for ii in range(9)]
-        for rr in self.rowList:
-            iff = int( round( rr['freq'] ) )
-            '''
-            if self.cell == 7492 and self.exc == 0 and self.numSq == 5 and self.pattern == 48:
-                print( "cell=", self.cell, " IFF=", iff, " idx=", self.idx )
-            '''
-            meanVal = rr[valNames]
-            meanTval = rr[tvalNames]
-            meanPk = rr[pkNames]
-            meanTpk = rr[tpkNames]
+        freqList = self.celldf['freq'].unique()
+        for ff in freqList:
+            iff = int( round( ff ) )
+            patdf = self.celldf.loc[
+                    (self.celldf['freq']==iff) & 
+                    (self.celldf['exc']==self.exc) & 
+                    (self.celldf['numSq']==self.numSq) &
+                    (self.celldf['pattern']==self.pattern)
+                ]
+            meanVal = patdf[valNames].mean(axis=0)
+            meanTval = patdf[tvalNames].mean(axis=0)
+            meanPk = patdf[pkNames].mean(axis=0)
+            meanTpk = patdf[tpkNames].mean(axis=0)
             means = np.array( [meanTval, meanVal, meanTpk, meanPk ] ).transpose()
             self.dumpFindSim( means, iff, False ) # for the pk/val
             if self.doPairedPulse:
                 self.dumpFindSim( means, iff, True ) # for the paired pulse
-        self.dumpHoss()
+        self.dumpHoss( freqList )
         excLabel = "Exc" if self.exc else "Inh"
-        fileSig = "{}_{}_{}_{}_{}".format( self.cell, self.exc, self.numSq, self.pattern, self.idx )
-        fname = "TConfigs/run{}.json".format( fileSig )
-        #os.sync()
+        fileSig = "{}_{}_{}_{}".format( self.cell, self.exc, self.numSq, self.pattern )
+        fname = "Configs/run{}.json".format( fileSig )
         hoss.main( [fname, "--algorithm", self.algorithm ] )
-        df = pandas.read_table( "TResults/_opt{}result.txt".format( fileSig ), sep='\s+', skiprows=3, nrows=numHossParams, engine="python", header = None )
-        assert(os.path.exists( "TExpts/fs_{}_20_pk.json".format(fileSig) ) )
-        for rr in self.rowList:
-            iff = int( round( rr['freq'] ) )
-            #print( "remove TExpts/fs_{}_{}_pk.json".format( fileSig, iff ) )
-            os.remove( "TExpts/fs_{}_{}_pk.json".format( fileSig, iff ) )
-            os.remove( "TExpts/fs_{}_{}_pp.json".format( fileSig, iff ) )
-        paramNames = ["cell", "exc", "numSq", "pattern", "idx", "initScore", "finalScore"] + list(df.iloc[:,0])
+        df = pandas.read_table( "Results/_opt{}result.txt".format( fileSig ), sep='\s+', skiprows=3, nrows=numHossParams, engine="python", header = None )
+        assert(os.path.exists( "Expts/fs_{}_20_pk.json".format(fileSig) ) )
+        for ff in freqList:
+            iff = int( round( ff ) )
+            os.remove( "Expts/fs_{}_{}_pk.json".format( fileSig, iff ) )
+            os.remove( "Expts/fs_{}_{}_pp.json".format( fileSig, iff ) )
+            #os.remove( "Expts/fs_{}_{}_min.json".format( fileSig, iff ) )
+        paramNames = ["cell", "exc", "numSq", "pattern", "initScore", "finalScore"] + list(df.iloc[:,0])
         initScore = 0.0
         finalScore = 0.0
-        with open( "TResults/_opt{}result.txt".format(fileSig) , "r") as fp:
+        with open( "Results/_opt{}result.txt".format(fileSig) , "r") as fp:
             last_line = fp.readlines()[-1]
             sp = last_line.replace( ",", " ").split( " " )
             initScore = float(sp[3])
             finalScore = float( sp[-1])
-        return paramNames, [self.cell, self.exc, self.numSq, self.pattern, self.idx, initScore, finalScore] + list( df.iloc[:, 2] )
+        return paramNames, [self.cell, self.exc, self.numSq, self.pattern, initScore, finalScore] + list( df.iloc[:, 2] )
         '''
-        df = pandas.read_table( "TResults/_opt{}results.txt".format( fileSig ), sep='\s+', skiprows=3, nrows=8, engine="python", header = None )
+        df = pandas.read_table( "Results/_opt{}results.txt".format( fileSig ), sep='\s+', skiprows=3, nrows=8, engine="python", header = None )
         paramNames = ["cell", "exc", "numSq", "pattern"] + list(df.iloc[:,0])
         return paramNames, [self.cell, self.exc, self.numSq, pattern] + list( df.iloc[:, 2] )
         '''
@@ -90,7 +90,7 @@ class EvalFunc:
 
 
     def dumpFindSim( self, means, freq, isPP ):
-        fileSig = "{}_{}_{}_{}_{}".format( self.cell, self.exc, self.numSq, self.pattern, self.idx )
+        fileSig = "{}_{}_{}_{}".format( self.cell, self.exc, self.numSq, self.pattern )
         stimAmpl = 50.0
         Ca_basal = 0.08
         stimWidth = 0.002
@@ -157,7 +157,7 @@ class EvalFunc:
 
         fsEndStr = '\n        ]\n  }\n}\n'
 
-        fname = "TExpts/fs_{}_{}_{}.json".format( fileSig, freq, pkLabel )
+        fname = "Expts/fs_{}_{}_{}.json".format( fileSig, freq, pkLabel )
         settleTime = 1.0
         with open( fname, "w" ) as fp:
             ############# Write the Ca stim sequence ################
@@ -192,14 +192,14 @@ class EvalFunc:
                 comma = ","
             fp.write( fsEndStr )
 
-    def dumpHoss( self ):
+    def dumpHoss( self, freqList ):
         excLabel = "Exc" if self.exc else "Inh"
-        fileSig = "{}_{}_{}_{}_{}".format( self.cell, self.exc, self.numSq, self.pattern, self.idx )
-        fname = "TConfigs/run{}.json".format( fileSig )
+        fileSig = "{}_{}_{}_{}".format( self.cell, self.exc, self.numSq, self.pattern )
+        fname = "Configs/run{}.json".format( fileSig )
         exptStr = ''
         comma = "\n                    "
-        for rr in self.rowList:
-            iff = int( round( rr['freq'] ) )
+        for ff in freqList:
+            iff = int( round( ff ) )
             exptStr += '{}"fs_{}_{}_pk.json": {{"weight": {} }}'.format(
                 comma, fileSig, iff, 200 if iff in [20, 50] else 100 )
             comma = ",\n                    "
@@ -213,8 +213,8 @@ class EvalFunc:
     "author": "TabPresyn program",
     "model": "Models/{0}Presyn{1}.g",
     "map":"Maps/mapPresyn.json",
-    "exptDir": "./TExpts",
-    "outputDir": "./TResults",
+    "exptDir": "./Expts",
+    "outputDir": "./Results",
     "scoreFunc": "NRMS",
     "tolerance": 0.0001,
     "algorithm": "COBYLA",
@@ -248,10 +248,10 @@ class EvalFunc:
 def main():
     global fracVesicleRelease
     parser = argparse.ArgumentParser( description = "Fits presynaptic release model to STP curves from pandas file. Required directories: Configs, Models, Expts, Results, Maps" )
-    parser.add_argument( "-o", "--output", type = str, help = "Optional: output pandas hdf file for model params, default = model_params_trials.h5", default = "model_params_trials.h5")
+    parser.add_argument( "-o", "--output", type = str, help = "Optional: output pandas hdf file for model params, default = model_params.h5", default = "model_params.h5")
     parser.add_argument( "-f", "--file", type = str, 
-            help = "Optional: Name of tabulated STP file in pandas hdf5 format. Default = 'STP_trial_pks_and_refs.h5'", 
-            default = "STP_trial_pks_and_refs.h5" )
+            help = "Optional: Name of tabulated STP file in pandas hdf5 format. Default = 'STP_pks_and_refs.h5'", 
+            default = "STP_pks_and_refs.h5" )
     parser.add_argument( "-pd", "--peakDelay", type = float, 
             help = "Optional: Delay for time of glu peak in ms. Default = 10", default = 10.0)
     parser.add_argument( '-n', '--numProcesses', type = int, default = 0, help='Optional: Number of processes to spawn' )
@@ -281,50 +281,12 @@ def main():
     for cell in cellList:
         for exc in [ 0, 1 ]:
             for numSq in [ 5, 15 ]:
+                print( "cell={} exc={} numSq={}".format( int(cell), exc, numSq ))
                 celldf = dat.loc[dat['cell']==cell]
-                freqList = celldf['freq'].unique()
                 patterns = celldf.loc[celldf['numSq']==numSq]['pattern'].unique()
                 for pp in patterns:
-                    pattern = int( round( pp ) )
-                    #print( "cell={} exc={} numSq={} pattern={}".format( int(cell), exc, numSq, pattern ))
-                    rows = {}
-                    numTrials = []
-                    for ff in freqList:
-                        iff = int( round( ff ) )
-                        rows[iff] = []
-                        patdf = celldf.loc[
-                            (celldf['freq']==iff) & 
-                            (celldf['exc']==exc) & 
-                            (celldf['numSq']==numSq) &
-                            (celldf['pattern']==pattern)
-                        ]
-                        numTrials.append( len( patdf ) )
-                        for idx in range( len( patdf ) ):
-                            rows[iff].append( patdf.iloc[idx,:] )
-                    # Check that all the cases are repeated same # of times.
-                    if numTrials.count(numTrials[0]) != len(numTrials):
-                        print( "Warning: Inconsistent numTrials = ", numTrials,
-                                "\nIn freqs: ", rows.keys() )
-                        print( "Discarding smallest entry" )
-                        mt = min( numTrials )
-                        if numTrials.count( mt ) == 1:
-                            for key, value in rows.items():
-                                if len( value ) == mt:
-                                    rows.pop( key )
-                                    print( "popping entry for ", key )
-                                    break
-                        else:
-                            quit()
-
-                    for idx in range( numTrials[0] ):
-                        r2 = []
-                        for iff in rows:
-                            #iff = int( round( ff ) )
-                            r2.append( rows[iff][idx] )
-                            #print( "Appended ", rows[iff][idx]["cell"], iff, idx )
-                        #print( "DONE APPPPPPPPPP", flush = True )
-                        ev = EvalFunc( cell, r2, exc, numSq, pattern, idx, args )
-                        ret.append( pool.apply_async( ev.fitCell, callback=ev.ticker ))
+                    ev = EvalFunc( cell, celldf, exc, numSq, pp, args )
+                    ret.append( pool.apply_async( ev.fitCell, callback=ev.ticker ))
     ans = [ rr.get() for rr in ret ]
 
     for aa in ans:
