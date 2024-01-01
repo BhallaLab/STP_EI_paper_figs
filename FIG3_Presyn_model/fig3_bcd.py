@@ -125,8 +125,6 @@ def calcKernel( dat ):
     else:
         return kmin, rawKernel, baseline, tauFit(rawKernel, baseline)
 
-    #plt.plot( t, rawKernel )
-
 def findStpScale( kernel, kpk, ret, si, stimWidth, tau ):
     # ret[0,1] = valley_t, y; ret[1,2] = pk_t, y
     if ret[0] < endT and si < (endT * sampleRate):
@@ -137,18 +135,14 @@ def findStpScale( kernel, kpk, ret, si, stimWidth, tau ):
         kpkIdx = np.argmax( kernel[:-stimWidth] )
     pkIdx = int( round ( (ret[2]) * sampleRate )) - si
     riseIdx = int( round ( (ret[2] - ret[0]) * sampleRate ))
-    # This is the kernel change due to the time between valley and peak.
-    #print( "riseDelta: ", kpkIdx, stimWidth, riseIdx, kpk )
     riseDelta1 = kernel[kpkIdx + stimWidth - riseIdx ] - kernel[kpkIdx + stimWidth]
     riseDelta = ret[1] - ret[1]*np.exp( -(ret[2] - ret[0]) / tau[1] )
-    plt.plot( [ret[2], ret[2]], [-riseDelta + ret[1], ret[3]], "bx-" )
-    #print( "origRiseDelta={:.4f}, new={:.4f}".format( riseDelta1, riseDelta) )
+    label = "Min to Max" if (si < 11000 and kpk > 0) else None
+    plt.plot( [ret[2], ret[2]], [-riseDelta + ret[1], ret[3]], "ro-", label = label )
     if ret[0] < endT + 0.01:   # First pulse after ref.
         riseTotal = ret[3] - ret[1]
     else:
         riseTotal = riseDelta + ret[3] - ret[1]
-        #riseTotal = ret[3] - ret[1]
-    #print( "si, kpkidx, pkIdx, riseDelta, risetotal = ", int( sampleRate/stimWidth ), si, kpkIdx, pkIdx, riseDelta, riseTotal/kpk )
     return riseTotal / kpk
 
 def findPkVal( dat, freq, startIdx, isExc ):
@@ -191,11 +185,8 @@ def deconv( dat, freq ):
 
     for si in stimIdx:
         ret = findPkVal( dat, freq, si + kpkidx//2, (kpk < 0) )
-        #ret = findPkVal( dat, freq, si, (kpk < 0) )
         pv.append( ret )
-        #print( "FindSTPSCALE: ", kpk, ret, si, stimWidth )
         scale = findStpScale( kernel, kpk, ret, si, stimWidth, tau )
-        #print( si, scale )
         scaleList.append( scale )
         if kpk > 0:
             label = "Inh"
@@ -209,14 +200,9 @@ def deconv( dat, freq ):
 def plotFromKernel( scaleList, stimIdx, kernel, freq, npv, label ):
     ret = np.zeros( int( round( sampleRate * 1.5 ) ) ) 
     ret[int(round(sampleRate* endT )):] += npv[1][1]
-    #print( "LK = ", len( kernel ), len( ret ), stimIdx, scaleList )
-    print( "SHAPE = ", npv.shape )
-    #for ss, idx in zip( scaleList, stimIdx ):
     for ii in range( len( scaleList ) ):
         ss = scaleList[ii]
         idx = stimIdx[ii]
-        #idx -= int( round( endT * sampleRate) )
-        #print( "SS, IDX = ", ss, idx )
         if idx > 0 :
             ks = kernel * ss
             if label == "Inh":
@@ -226,13 +212,9 @@ def plotFromKernel( scaleList, stimIdx, kernel, freq, npv, label ):
             ret[idx:len(kernel)+idx] += ks + offset
 
     t = np.arange( 0.0, 1.0 - 1e-6, 1.0/sampleRate )
-    #t2 = np.insert( t, 0, startT )
-    #t2 = np.array( [0.2]+[endT + ii/freq for ii in range(8)] )
-    #t2 = np.array( [0.2]+[ endT + ii/sampleRate for ii in stimIdx[1:]] )
-    plt.plot( t, ret[0:len(t)], ":", label = label + "_est" )
-    #print( "npv shape = ", npv.shape, ", len scaleList = ", len( scaleList ) )
+    #plt.plot( t, ret[0:len(t)], ":", label = label + "_est" )
     plt.plot( npv[0], npv[1], "c*-" )
-    plt.plot( npv[2], npv[3], "y*-" )
+    plt.plot( npv[2], npv[3], "y.-" )
     return ret[:len(t)]
 
 def innerAnalysis( sqDat, freq, pattern, cellNum ):
@@ -264,8 +246,8 @@ def innerAnalysis( sqDat, freq, pattern, cellNum ):
 
     if doFigs:
         t = np.arange( 0.0, runtime - 1e-6, 1.0/sampleRate )
-        plt.plot( t, imean, label="Inh" )
-        plt.plot( t, emean, label="Exc" )
+        plt.plot( t, imean, "g-", label="Inh" )
+        plt.plot( t, emean, "b-", label="Exc" )
 
         plt.xlabel( "Time (s)" )
         plt.ylabel( "Synaptic current (pA)" )
@@ -280,7 +262,7 @@ def innerAnalysis( sqDat, freq, pattern, cellNum ):
 
         plt.xlabel( "Time (s)" )
         plt.ylabel( "Residual (pA)" )
-        plt.legend()
+        plt.legend( position="upper left", frame = False )
         plt.title( "cell {}, Freq = {}: Residual ".format( cellNum, freq ) )
 
         plt.figure()
@@ -313,7 +295,7 @@ def main():
     freqList = sqDat['stimFreq'].unique()
     patternList = sqDat['patternList'].unique()
     freq = freqList[0]
-    pattern = int( patternList[0] )
+    pattern = int( patternList[1] )
     finh, fexc = innerAnalysis( sqDat, freq, pattern, cellNum )
     if doFigs:
         plt.show()
