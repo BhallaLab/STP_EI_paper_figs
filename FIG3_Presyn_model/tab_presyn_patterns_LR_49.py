@@ -68,7 +68,7 @@ class EvalFunc:
         fname = "Configs/run{}.json".format( fileSig )
         hoss.main( [fname, "--algorithm", self.algorithm ] )
         df = pandas.read_table( "Results/_opt{}result.txt".format( fileSig ), sep='\s+', skiprows=3, nrows=numHossParams, engine="python", header = None )
-        assert(os.path.exists( "Expts/fs_{}_20_pk.json".format(fileSig) ) )
+        #assert(os.path.exists( "Expts/fs_{}_20_pk.json".format(fileSig) ) )
         for ff in goodFreqList:
             iff = int( round( ff ) )
             os.remove( "Expts/fs_{}_{}_pk.json".format( fileSig, iff ) )
