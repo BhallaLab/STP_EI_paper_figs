@@ -37,31 +37,39 @@ class EvalFunc:
         tpkNames = ['tpk{}'.format(ii) for ii in range(9)]
         valNames = ['val{}'.format(ii) for ii in range(9)]
         tvalNames = ['tval{}'.format(ii) for ii in range(9)]
-        freqList = self.celldf['freq'].unique()
+        patdf = self.celldf.loc[
+                (self.celldf['exc']==self.exc) & 
+                (self.celldf['numSq']==self.numSq) &
+                (self.celldf['pattern']==self.pattern)
+            ]
+        if patdf.empty:
+            return None, None
+        freqList = patdf['freq'].unique()
+        goodFreqList = []
         for ff in freqList:
             iff = int( round( ff ) )
-            patdf = self.celldf.loc[
-                    (self.celldf['freq']==iff) & 
-                    (self.celldf['exc']==self.exc) & 
-                    (self.celldf['numSq']==self.numSq) &
-                    (self.celldf['pattern']==self.pattern)
-                ]
-            meanVal = patdf[valNames].mean(axis=0)
-            meanTval = patdf[tvalNames].mean(axis=0)
-            meanPk = patdf[pkNames].mean(axis=0)
-            meanTpk = patdf[tpkNames].mean(axis=0)
+            freqdf = patdf.loc[ (patdf['freq']==iff) ]
+            if freqdf.empty:
+                continue
+            goodFreqList.append( ff )
+            meanVal = freqdf[valNames].mean(axis=0)
+            meanTval = freqdf[tvalNames].mean(axis=0)
+            meanPk = freqdf[pkNames].mean(axis=0)
+            meanTpk = freqdf[tpkNames].mean(axis=0)
             means = np.array( [meanTval, meanVal, meanTpk, meanPk ] ).transpose()
             self.dumpFindSim( means, iff, False ) # for the pk/val
             if self.doPairedPulse:
                 self.dumpFindSim( means, iff, True ) # for the paired pulse
-        self.dumpHoss( freqList )
+        if len( goodFreqList ) == 0:
+            return None, None
+        self.dumpHoss( goodFreqList )
         excLabel = "Exc" if self.exc else "Inh"
         fileSig = "{}_{}_{}_{}".format( self.cell, self.exc, self.numSq, self.pattern )
         fname = "Configs/run{}.json".format( fileSig )
         hoss.main( [fname, "--algorithm", self.algorithm ] )
         df = pandas.read_table( "Results/_opt{}result.txt".format( fileSig ), sep='\s+', skiprows=3, nrows=numHossParams, engine="python", header = None )
         assert(os.path.exists( "Expts/fs_{}_20_pk.json".format(fileSig) ) )
-        for ff in freqList:
+        for ff in goodFreqList:
             iff = int( round( ff ) )
             os.remove( "Expts/fs_{}_{}_pk.json".format( fileSig, iff ) )
             os.remove( "Expts/fs_{}_{}_pp.json".format( fileSig, iff ) )
@@ -291,7 +299,8 @@ def main():
 
     for aa in ans:
         [paramNames, paramVals] = aa
-        params.append( paramVals )
+        if paramNames:
+            params.append( paramVals )
     df = pandas.DataFrame( params, columns = paramNames )
     df.info()
     df.to_hdf( args.output, "w" )
