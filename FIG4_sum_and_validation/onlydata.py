@@ -53,15 +53,32 @@ SAMPLE_START = 49
 SWEEP = 16
 PKDELAY = int( 0.020 * SAMPLE_FREQ )
 PKTHRESH = 0.0005 # Threshold for a distinct EPSP pk. In Volts
-ALPHATAU = 0.005 * SAMPLE_FREQ
-ALPHAWINDOW = int( ALPHATAU * 4 )
-ALPHA = np.array( [ (t/ALPHATAU)*np.exp(1-t/ALPHATAU) for t in range( ALPHAWINDOW ) ] )
+ALPHATAU1 = 0.005 * SAMPLE_FREQ
+ALPHATAU2 = 0.042 * SAMPLE_FREQ
+ALPHADELAY = int( 0.010 * SAMPLE_FREQ )
+ALPHAWINDOW = int( ALPHATAU2 * 8 )
 
 moogList = [
     ['#', '1', '.', 'Vm', 'Membrane potential', -70.0, 0.0],
     ['#', '1', 'glu/Ca', 'n', 'Glu Ca n', 0.0, 1000.0],
     ['#', '1', 'GABA/Ca', 'n', 'GABA Ca n', 0.0, 1000.0]
 ]
+
+def alphaFunc( t, tp ):
+    return (t/tp) * np.exp(1-t/tp)
+
+def dualAlphaFunc( t, t1, t2 ):
+    if t < 0:
+        return 0.0
+    if abs( t1 - t2 ) < 1e-6:
+        return alphaFunc( t, t1 )
+    return (1.0/(t1-t2)) * (np.exp(-t/t1) - np.exp(-t/t2))
+
+ALPHA = np.array( [ dualAlphaFunc(t, ALPHATAU1, ALPHATAU2 ) for t in range( ALPHAWINDOW ) ] )
+ALPHA = ALPHA / max( ALPHA )
+longAlpha = np.zeros(NUM_SAMPLES)
+longAlpha[:ALPHAWINDOW] += ALPHA
+
 
 def patternDict():
     patternZeros = [0]*64
@@ -417,34 +434,20 @@ def makeNetwork( rdes ):
         rdes.moogNames.append( rmoogli.makeMoogli( rdes, interneurons, interneuronArgs, rd.knownFieldsDefault['Vm'] ) )
         rdes.elecId = origNeuronId
 
-def findPeaks( pulseTrig, pulseThresh, Vm, width = 0.005 ):
+def findPeaks( pulseTrig, pulseThresh, Vm, width = 0.002 ):
     widthSamples = int( np.round( width * SAMPLE_FREQ ) )
     half = widthSamples // 2
-    trigIdx = []
     lastPP = 0.0
-    for idx, pp in enumerate( pulseTrig ):
-        if pp > pulseThresh and lastPP < pulseThresh:
-            trigIdx.append( idx )
-            #print( idx )
-        lastPP = pp
-
     pks = []
     pkIdx = []
-    for idx in trigIdx:
-        idx2 = idx + PKDELAY
-        # NOTE that maxIdx is relative to idx2, ie, within a window.
-        maxIdx = np.argmax( Vm[idx2-widthSamples:idx2+widthSamples] )
-        #print( "{:.3f}".format( idx2 / SAMPLE_FREQ ) )
-        if maxIdx > half and maxIdx < (3*half):
-            thisMin = min(Vm[ idx2-widthSamples-half : idx2-widthSamples ])
-            thisMax = Vm[idx2 + maxIdx - widthSamples]
-            #print( "thisdelta", thisMax - thisMin, PKTHRESH, len( trigIdx), len( pulseTrig ))
-            if (thisMax - thisMin) > PKTHRESH:
-                print( "thisPK t = {:.3f}, pk = {:.3f}".format( idx, thisMax ) )
-                pks.append(thisMax - thisMin)
-                pkIdx.append( idx )
+    for idx, pp in enumerate( pulseTrig ):
+        if pp > pulseThresh and lastPP < pulseThresh:
+            idx2 = idx + PKDELAY - widthSamples
+            pkIdx.append( idx )
+            pks.append(np.median( Vm[idx2:idx2 + widthSamples*2] ))
+        lastPP = pp
 
-    print( "NUMPKS = ", len( pkIdx ), len( trigIdx ) )
+    print( "NUMPKS = ", len( pkIdx ), len( pks ) )
     return pkIdx, pks
 
 
@@ -516,9 +519,16 @@ def main():
     ipsc = np.array(df.iloc[SWEEP + 24, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ] )
 
     pkIdx, pks = findPeaks( pulseTrig, pulseThresh, epsc )
-    fitEPSP = np.zeros( len( epsc ) )
+    fitEPSP = np.zeros( len( epsc ) + ALPHAWINDOW * 2 )
+    lastPP = 0.0
+    lastIdx = 0
     for idx, pp in zip( pkIdx, pks ):
-        fitEPSP[idx:idx+ALPHAWINDOW] += ALPHA*pp
+        ii = idx + ALPHADELAY
+        ascale = pp - lastPP*longAlpha[int(ALPHATAU1*2) + idx-lastIdx]
+        if ascale > 0:
+            fitEPSP[ii:ii+ALPHAWINDOW] += ascale * ALPHA
+            lastIdx = idx
+            lastPP = pp
 
     #moose.reinit()
     '''
@@ -590,7 +600,7 @@ def main():
             plt.ylabel( "Vm (mV)" )
             plt.xlim( settleTime - 0.1, runtime + 0.1 )
             plt.plot( tepsc, epsc, "b", label = "Data EPSP" )
-            plt.plot( tepsc, fitEPSP, "r", label = "Fit EPSP" )
+            plt.plot( tepsc, fitEPSP[:len(tepsc)], "r", label = "Fit EPSP" )
             plt.ylabel( "EPSP (mV)" )
             plt.legend()
         # Plot the vertical lines separating 8 stimuli
