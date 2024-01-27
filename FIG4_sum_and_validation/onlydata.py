@@ -51,6 +51,11 @@ SAMPLE_TIME = 11
 NUM_SAMPLES = SAMPLE_FREQ * SAMPLE_TIME
 SAMPLE_START = 49
 SWEEP = 16
+PKDELAY = int( 0.020 * SAMPLE_FREQ )
+PKTHRESH = 0.0005 # Threshold for a distinct EPSP pk. In Volts
+ALPHATAU = 0.005 * SAMPLE_FREQ
+ALPHAWINDOW = int( ALPHATAU * 4 )
+ALPHA = np.array( [ (t/ALPHATAU)*np.exp(1-t/ALPHATAU) for t in range( ALPHAWINDOW ) ] )
 
 moogList = [
     ['#', '1', '.', 'Vm', 'Membrane potential', -70.0, 0.0],
@@ -292,7 +297,7 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
     moose.element( '/library/GABA' ).Ek = -0.07 # Tweak Erev.
     rdes.buildModel()
     if useGssa:
-        moose.showfield( "/model/chem/glu/ksolve" )
+        #moose.showfield( "/model/chem/glu/ksolve" )
         moose.element( "/model/chem/glu/ksolve" ).useClockedUpdate = 1
         moose.element( "/model/chem/GABA/ksolve" ).useClockedUpdate = 1
     # Here we can add a few messages from the periodic synaptic input to the
@@ -300,7 +305,7 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
     
     #rs = moose.element( '/model/elec/soma/GABAR/sh/synapse/synInput_rs' )
     #moose.connect( rs, "spikeOut", "/model/chem/dend/glu/Ca/tab", "input" )
-    moose.reinit()
+    #moose.reinit()
     return rdes
 
 
@@ -412,6 +417,39 @@ def makeNetwork( rdes ):
         rdes.moogNames.append( rmoogli.makeMoogli( rdes, interneurons, interneuronArgs, rd.knownFieldsDefault['Vm'] ) )
         rdes.elecId = origNeuronId
 
+def findPeaks( pulseTrig, pulseThresh, Vm, width = 0.005 ):
+    widthSamples = int( np.round( width * SAMPLE_FREQ ) )
+    half = widthSamples // 2
+    trigIdx = []
+    lastPP = 0.0
+    for idx, pp in enumerate( pulseTrig ):
+        if pp > pulseThresh and lastPP < pulseThresh:
+            trigIdx.append( idx )
+            #print( idx )
+        lastPP = pp
+
+    pks = []
+    pkIdx = []
+    for idx in trigIdx:
+        idx2 = idx + PKDELAY
+        # NOTE that maxIdx is relative to idx2, ie, within a window.
+        maxIdx = np.argmax( Vm[idx2-widthSamples:idx2+widthSamples] )
+        #print( "{:.3f}".format( idx2 / SAMPLE_FREQ ) )
+        if maxIdx > half and maxIdx < (3*half):
+            thisMin = min(Vm[ idx2-widthSamples-half : idx2-widthSamples ])
+            thisMax = Vm[idx2 + maxIdx - widthSamples]
+            #print( "thisdelta", thisMax - thisMin, PKTHRESH, len( trigIdx), len( pulseTrig ))
+            if (thisMax - thisMin) > PKTHRESH:
+                print( "thisPK t = {:.3f}, pk = {:.3f}".format( idx, thisMax ) )
+                pks.append(thisMax - thisMin)
+                pkIdx.append( idx )
+
+    print( "NUMPKS = ", len( pkIdx ), len( trigIdx ) )
+    return pkIdx, pks
+
+
+
+
 def main():
     global freq
     global moogList
@@ -469,14 +507,20 @@ def main():
 
     # Set up the stimulus timings
     df = pandas.read_hdf( patternData )
-    pulseTrig = np.array(df.iloc[SWEEP, SAMPLE_START + 2*NUM_SAMPLES:SAMPLE_START+3*NUM_SAMPLES ][::10] )
+    # NOTE: Iterate over cells here before going to individual pulses.
+    pulseTrig = np.array(df.iloc[SWEEP, SAMPLE_START + 2*NUM_SAMPLES:SAMPLE_START+3*NUM_SAMPLES ] )
     pulseThresh = ( min( pulseTrig ) + max( pulseTrig ) ) / 2.0
     print( "LEN PULSE TR=", len( pulseTrig ) )
-    epsc = np.array(df.iloc[SWEEP, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ][::10] )
-    tepsc = np.linspace( settleTime, SAMPLE_TIME + settleTime, len(epsc) )
-    ipsc = np.array(df.iloc[SWEEP + 24, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ][::10] )
+    epsc = np.array(df.iloc[SWEEP, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ])
+    tepsc = np.linspace( 0, SAMPLE_TIME, len(epsc) )
+    ipsc = np.array(df.iloc[SWEEP + 24, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ] )
 
-    moose.reinit()
+    pkIdx, pks = findPeaks( pulseTrig, pulseThresh, epsc )
+    fitEPSP = np.zeros( len( epsc ) )
+    for idx, pp in zip( pkIdx, pks ):
+        fitEPSP[idx:idx+ALPHAWINDOW] += ALPHA*pp
+
+    #moose.reinit()
     '''
     print( "NumGluR = ", len( moose.vec('/model/chem/glu/glu') ),
         "  NumGABA sites = ", 
@@ -499,8 +543,8 @@ def main():
             #vc = moose.element( '/model/elec/soma/vclamp' )
             #vc.gain *= 1.0
         #print( freq )
-        moose.reinit()
-        moose.start( runtime )
+        #moose.reinit()
+        #moose.start( runtime )
         #gluAuc = getAUC( '/model/graphs/plot1', freq )
         #GABAAuc = getAUC( '/model/graphs/plot2', freq )
         fig = plt.figure( "StimFreq = " + str( freq ), figsize = (11.8, 3.5) )
@@ -515,10 +559,11 @@ def main():
         #plt.title( "Freq = {} Hz, NumSq = {}, Seq = {}".format( freq, args.numSq, args.sequence ), size = 12 )
         offset = -90.0 if args.spiking else -70.0
         #plt.text(1, offset, args.sequence, fontsize = 24, fontfamily = 'monospace')
-        plot0 = moose.element( '/model/graphs/plot0' ).vector
+        #plot0 = moose.element( '/model/graphs/plot0' ).vector
         dt = moose.element( '/model/graphs/plot0' ).dt
-        tpt = np.arange( 0, len( pulseTrig ) * dt - 1e-6, dt ) + settleTime
-        t = np.arange( 0, len( plot0 ) * dt - 1e-6, dt )
+        print( "DT = ", dt )
+        tpt = np.arange( 0.0, len( pulseTrig ), 1 )/SAMPLE_FREQ
+        #t = np.arange( 0, len( plot0 ) * dt - 1e-6, dt )
         #stimY = np.array( [(0.0 if (tt < settleTime or tt > stimEnd) else float((int((tt-1.0)*freq) % 8))) for tt in t] )
         if args.voltage_clamp:
             plot0[:10] = 0  # clear out transient
@@ -528,10 +573,10 @@ def main():
             #plt.plot( t, stimY * 1e9, "g", label = "stimStage" )
             moose.element( "/model/stims/stim0" ).expr = GABAR_clamp_potl
             moose.reinit()
-            moose.start( runtime )
-            plot0 = moose.element( '/model/graphs/plot0' ).vector
-            plot0[:10] = GABAR_clamp_offset / 1e12  # clear out transient
-            plt.plot( t, plot0 * 1e12 - GABAR_clamp_offset, "b", label = "I_GABAR" )
+            #moose.start( runtime )
+            #plot0 = moose.element( '/model/graphs/plot0' ).vector
+            #plot0[:10] = GABAR_clamp_offset / 1e12  # clear out transient
+            #plt.plot( t, plot0 * 1e12 - GABAR_clamp_offset, "b", label = "I_GABAR" )
             plt.plot( tepsc, epsc + 50, label = "expt_EPSC" )
             plt.plot( tepsc, ipsc + 150, label = "expt_IPSC" )
             plt.ylabel( "clamp curr (pA)" )
@@ -539,12 +584,13 @@ def main():
 
             #plt.ylabel( "ipsc (pA)" )
         else:
-            plt.plot( t, plot0 * 1000 + 65, "r", label = "Sim EPSP" )
-            plt.plot( tpt, pulseTrig * 100, "g", label = "pulseTrig" )
+            #plt.plot( t, plot0 * 1000 + 65, "r", label = "Sim EPSP" )
+            plt.plot( tpt, pulseTrig * 100, "g", label = "Trigger" )
             #y = [ offset, max( plot0 ) * 1000 ]
             plt.ylabel( "Vm (mV)" )
             plt.xlim( settleTime - 0.1, runtime + 0.1 )
             plt.plot( tepsc, epsc, "b", label = "Data EPSP" )
+            plt.plot( tepsc, fitEPSP, "r", label = "Fit EPSP" )
             plt.ylabel( "EPSP (mV)" )
             plt.legend()
         # Plot the vertical lines separating 8 stimuli
