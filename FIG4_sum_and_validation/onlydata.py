@@ -129,9 +129,47 @@ def doStats( df, alphaTab, alphaDelay, pkDelay ):
         fig.tight_layout()
         plt.show()
 
-    return foundIdx, foundPks, len( pkIdx )
+    return np.array(foundIdx), np.array(foundPks), len( pkIdx )
 
-def analyze( ax, cell, num5, pkVal5, num15, pkVal15 ):
+def analyze( ax1, ax2, ax3, cell, pks, label ):
+    totPks = np.array( [] )
+    leftPks = np.array( [] )
+    rightPks = np.array( [] )
+    leftProb = 0.0
+    rightProb = 0.0
+    totProb = 0.0
+    # Total duration is 11 sec. We split halfway.
+    for key in pks:
+        ii, pp, nn = pks[key]
+        leftPks = np.append( leftPks,  pp[ ii < 5.5*SAMPLE_FREQ] )
+        rightPks = np.append( rightPks,  pp[ ii >= 5.5*SAMPLE_FREQ] )
+        totPks = np.append( totPks,  pp )
+        # 0.5 mV is cutoff for using EPSP.
+        leftProb += 2*len( pp[(pp>0.5) & (ii<5.5*SAMPLE_FREQ)] ) / nn
+        rightProb += 2*len( pp[(pp>0.5) & (ii>=5.5*SAMPLE_FREQ)] ) / nn
+        totProb += len(pp) / nn
+        if key <= 50:
+            ax3.hist( pp, bins = 20, alpha = 0.5, label = str(key) + " " + label, histtype = "step", linewidth = 2, color = None )
+    print("PROBS = tot{:.3f} L{:.3f} R{:.3f}".format(
+        totProb / len(pks), leftProb / len(pks), rightProb/len(pks)
+    ) )
+   
+    ax1.hist( totPks, bins = 32, alpha = 0.5, label = label, histtype = "step", linewidth = 2, color = None )
+    ax2.hist( leftPks, bins = 32, alpha = 0.5, label = "L " + label, histtype = "step", linewidth = 2, color = None )
+    ax2.hist( rightPks, bins = 32, alpha = 0.5, label = "R " + label, histtype = "step", linewidth = 2, color = None )
+    ax1.set_xlabel( "EPSP Amplitude (mV)" )
+    ax1.set_ylabel( "#")
+    #ax1.text( 0.10, 1.05, "p5={:.3f}".format( prob5 ), fontsize = 16, transform=ax.transAxes )
+    #ax1.text( 0.50, 1.05, "p15={:.3f}".format( prob15 ), fontsize = 16, transform=ax.transAxes )
+    ax1.text( -0.10, 1.05, str(cell), fontsize = 22, weight = "bold", transform=ax1.transAxes )
+    ax1.legend( loc = 'upper right', frameon = False, title = None )
+    ax2.legend( loc = 'upper right', frameon = False, title = None )
+    ax3.legend( loc = 'upper right', frameon = False, title = None )
+    
+
+
+    '''
+    # pk5[pp] = [foundIdx, foundPks, totNumPulse]
     prob5 = len( pkVal5 ) / num5
     prob15 = len( pkVal15 ) / num15
     print( "prob5={:.3f},{:.3f}, prob15={:.3f},{:.3f}".format( 
@@ -146,6 +184,7 @@ def analyze( ax, cell, num5, pkVal5, num15, pkVal15 ):
     ax.text( 0.50, 1.05, "p15={:.3f}".format( prob15 ), fontsize = 16, transform=ax.transAxes )
     ax.text( -0.10, 1.05, str(cell), fontsize = 22, weight = "bold", transform=ax.transAxes )
     ax.legend( loc = 'upper right', frameon = False, title = None )
+    '''
 
 def main():
     global pulseTrig
@@ -153,7 +192,7 @@ def main():
     global doPlot
 
     plt.rcParams.update( {"font.size": 24} )
-    fig, ax = plt.subplots( nrows = 3, ncols=1, figsize = (8, 15) )
+    fig, ax = plt.subplots( nrows = 3, ncols=3, figsize = (18, 15) )
 
     # Set up the stimulus timings
     df = pandas.read_hdf( patternData )
@@ -179,12 +218,8 @@ def main():
         dcell = df.loc[df["cellID"] == cell]
         ipat = dcell["patternList"].astype(int)
         patList = ipat.unique()
-        pkTime5 = []
-        pkTime15 = []
-        pkVal5 = []
-        pkVal15 = []
-        num5 = 0
-        num15 = 0
+        pk5 = {}
+        pk15 = {}
         for pp in patList:
             dpat = dcell.loc[ipat == pp]
             sweepList = dpat['sweep'].unique()
@@ -201,14 +236,11 @@ def main():
                     if totNumPulse == 0:
                         continue
                     if pp in [46,47,48,49,50]:
-                        pkTime5.extend( foundIdx )
-                        pkVal5.extend( foundPks )
-                        num5 += totNumPulse
+                        pk5[pp] = [foundIdx, foundPks, totNumPulse]
                     else:
-                        pkTime15.extend( foundIdx )
-                        pkVal15.extend( foundPks )
-                        num15 += totNumPulse
-        analyze( ax[cellIdx], cell, num5, pkVal5, num15, pkVal15 )
+                        pk15[pp] = [foundIdx, foundPks, totNumPulse]
+        analyze( ax[0][cellIdx], ax[1][cellIdx], ax[2][cellIdx], cell, pk5, "5 Sq" )
+        analyze( ax[0][cellIdx], ax[1][cellIdx], ax[2][cellIdx], cell, pk15, "15 Sq")
     
     fig.tight_layout()
     plt.show()
