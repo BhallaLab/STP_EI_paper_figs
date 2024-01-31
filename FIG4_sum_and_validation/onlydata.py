@@ -2,6 +2,8 @@ import pandas
 import pylab
 import numpy as np
 import math
+from scipy.stats import linregress
+
 import matplotlib.pyplot as plt
 
 freq = 80.0 # Hz
@@ -13,6 +15,8 @@ basalCa = 0.08e-3   # mM
 GABAdelay = 5.0e-3  # seconds
 width = 0.002
 doPlot = False
+doFieldPlot = False
+doEpspVsFieldPlot = True
 
 gluStimStr = "8e-5"
 GABAStimStr = "8e-5"
@@ -80,18 +84,41 @@ def findPeaks( pulseTrig, pulseThresh, pkDelay, Vm, width = 0.002 ):
 
     return pkIdx, pks
 
-def doStats( df, alphaTab, alphaDelay, pkDelay ):
+def doStats( df, alphaTab, alphaDelay, pkDelay, pattern = None ):
     pulseTrig = np.array(df.iloc[0, SAMPLE_START + 2*NUM_SAMPLES:SAMPLE_START+3*NUM_SAMPLES ] )
     pulseThresh = ( min( pulseTrig ) + max( pulseTrig ) ) / 2.0
     if pulseThresh < MINIMUM_PULSE_THRESH:
         return [], [], 0
     epsp = np.array(df.iloc[0, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ])
+    field = np.array(df.iloc[0, SAMPLE_START + 3*NUM_SAMPLES:SAMPLE_START+4*NUM_SAMPLES ] )
+    if doFieldPlot and pattern == 46:
+        plt.figure( figsize = (30, 5 ))
+        plt.plot( field )
+        plt.plot( pulseTrig * 5 + 0.1 )
+        plt.show()
+
     baseline = min( np.percentile(epsp, 25 ), 0.0 )
     print( "baseline={:.3f}, pulseThresh = {:.6f}".format( 
         baseline, pulseThresh ) )
     epsp -= baseline # hack to handle traces with large ipsps.
     tepsp = np.linspace( 0, SAMPLE_TIME, len(epsp) )
     pkIdx, pks = findPeaks( pulseTrig, pulseThresh, pkDelay, epsp )
+    fpkIdx, fpks = findPeaks( pulseTrig, pulseThresh, 90, np.median(field)-field, width = 0.001 )
+    if doEpspVsFieldPlot and pattern == 46:
+        sweep = int( df['sweep'] )
+        print( sweep )
+        if sweep == 4:
+            plt.figure( figsize = (8, 8 ))
+        plt.scatter( fpks, pks )
+        ret = linregress(fpks,pks)
+        for rr in ret:
+            # slope, intercept, r-value, p-value, stderr of p_value
+            print( "{:.3f}  ".format( rr ), end = "" )
+        print()
+        if sweep == 20:
+            plt.ylabel( "EPSP (mV)" )
+            plt.xlabel("fEPSP (mV)")
+            plt.show()
     fitEPSP = np.zeros( len( epsp ) + ALPHAWINDOW * 2 )
     lastPP = 0.0
     lastIdx = 0
@@ -109,7 +136,7 @@ def doStats( df, alphaTab, alphaDelay, pkDelay ):
 
     runtime = settleTime + SAMPLE_TIME + postStim
 
-    if doPlot:
+    if doPlot and pattern == 46:
         plt.rcParams.update( {"font.size": 24} )
         fig = plt.figure( "cell = ", figsize = (32, 3.5) )
 
@@ -186,6 +213,20 @@ def analyze( ax1, ax2, ax3, cell, pks, label ):
     ax.legend( loc = 'upper right', frameon = False, title = None )
     '''
 
+def setFittingParams( cell ):
+    if cell == 521:
+        alphaTab = np.array( [ dualAlphaFunc(t, ALPHATAU1, 0.018*SAMPLE_FREQ ) for t in range( ALPHAWINDOW ) ] )
+        alphaTab = alphaTab / max( alphaTab )
+        alphaDelay = int( 0.005 * SAMPLE_FREQ )
+        pkDelay = int( 0.015 * SAMPLE_FREQ )
+        doPlot = False
+    else:
+        alphaTab = ALPHA
+        alphaDelay = ALPHADELAY
+        pkDelay = PKDELAY
+        doPlot = False
+    return alphaTab, alphaDelay, pkDelay, doPlot
+
 def main():
     global pulseTrig
     global pulseThresh
@@ -203,17 +244,7 @@ def main():
     for cellIdx, cell in enumerate( cellList ):
         if cell == 4001:
             continue
-        if cell == 521:
-            alphaTab = np.array( [ dualAlphaFunc(t, ALPHATAU1, 0.018*SAMPLE_FREQ ) for t in range( ALPHAWINDOW ) ] )
-            alphaTab = alphaTab / max( alphaTab )
-            alphaDelay = int( 0.005 * SAMPLE_FREQ )
-            pkDelay = int( 0.015 * SAMPLE_FREQ )
-            doPlot = False
-        else:
-            alphaTab = ALPHA
-            alphaDelay = ALPHADELAY
-            pkDelay = PKDELAY
-            doPlot = False
+        alphaTab, alphaDelay, pkDelay, doPlot = setFittingParams( cell )
 
         dcell = df.loc[df["cellID"] == cell]
         ipat = dcell["patternList"].astype(int)
@@ -232,7 +263,7 @@ def main():
                     idx += 1
                     foundIdx, foundPks, totNumPulse = doStats( 
                         dsweep.loc[dsweep['exptSeq'] == seq],
-                        alphaTab, alphaDelay, pkDelay )
+                        alphaTab, alphaDelay, pkDelay, pattern = pp)
                     if totNumPulse == 0:
                         continue
                     if pp in [46,47,48,49,50]:
