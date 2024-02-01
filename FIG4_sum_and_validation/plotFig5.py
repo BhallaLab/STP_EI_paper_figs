@@ -17,6 +17,7 @@ width = 0.002
 doPlot = False
 doFieldPlot = False
 doEpspVsFieldPlot = True
+doFieldFitPlot = False
 
 gluStimStr = "8e-5"
 GABAStimStr = "8e-5"
@@ -84,6 +85,52 @@ def findPeaks( pulseTrig, pulseThresh, pkDelay, Vm, width = 0.002 ):
 
     return pkIdx, pks
 
+def findMinima( pulseTrig, pulseThresh, pkDelay, Vm, width = 0.002 ):
+    widthSamples = int( np.round( width * SAMPLE_FREQ ) )
+    half = widthSamples // 2
+    lastPP = 0.0
+    pks = []
+    pkIdx = []
+    for idx, pp in enumerate( pulseTrig ):
+        if pp > pulseThresh and lastPP < pulseThresh:
+            idx2 = idx + pkDelay - widthSamples
+            pkIdx.append( idx )
+            pks.append(-min( Vm[idx2:idx2 + widthSamples*2] ))
+        lastPP = pp
+
+    return pkIdx, pks
+
+def medianWindowFilter(data):
+    WINDOW_SIZE = 201
+    PAD_WIDTH = WINDOW_SIZE // 2
+    filtered = doFilter( data )
+    padData = np.pad( data, PAD_WIDTH, mode = 'edge' )
+    filtered = []
+    for i in range( len( data ) ):
+        window = padData[i:i+WINDOW_SIZE]
+        filtered.append(np.median(window))
+    data = np.array(data) - np.array(filtered)
+    return data
+
+def fftFilter( data ):
+    cut_off_frequency = 0.0001
+    fft_data = np.fft.fft(data)
+    N = len(data)
+    frequencies = np.fft.fftfreq(N, d=1)  # d is the sample spacing; assumed to be 1 for simplicity
+    filter_mask = np.abs(frequencies) > cut_off_frequency
+    fft_data[filter_mask] = 0
+    filtered_data = np.real(np.fft.ifft(fft_data))
+    '''
+    plt.figure(figsize=(15, 5))
+    #plt.plot(filtered_data, label='Filtered Data', linewidth=2)
+    #plt.plot(data, label='Original Data')
+    data = np.array( data - filtered_data )
+    plt.plot(data, label='Original Data')
+    plt.legend()
+    plt.show()
+    '''
+    return np.array(data - filtered_data)
+
 def parseRow( df, cell ):
     alphaTab, alphaDelay, pkDelay = setFittingParams( cell )
     pulseTrig = np.array(df.iloc[0, SAMPLE_START + 2*NUM_SAMPLES:SAMPLE_START+3*NUM_SAMPLES ] )
@@ -91,13 +138,21 @@ def parseRow( df, cell ):
     if pulseThresh < MINIMUM_PULSE_THRESH:
         return [], [], 0
     epsp = np.array(df.iloc[0, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ])
-    field = np.array(df.iloc[0, SAMPLE_START + 3*NUM_SAMPLES:SAMPLE_START+4*NUM_SAMPLES ] )
-
     baseline = min( np.percentile(epsp, 25 ), 0.0 )
     epsp -= baseline # hack to handle traces with large ipsps.
     tepsp = np.linspace( 0, 11, len(epsp) )
     pkIdx, pks = findPeaks( pulseTrig, pulseThresh, pkDelay, epsp )
-    fpkIdx, fpks = findPeaks( pulseTrig, pulseThresh, 90, np.median(field)-field, width = 0.001 )
+
+    if cell == 4041:
+        field = np.array(df.iloc[0, SAMPLE_START + 3*NUM_SAMPLES:SAMPLE_START+4*NUM_SAMPLES ] )
+        field = fftFilter( field )
+        fpkIdx, fpks = findMinima( pulseTrig, pulseThresh, 100, field, width = 0.002 )
+    else:
+        field = np.zeros( len( epsp ) )
+        fpkIdx = pkIdx
+        fpks = np.zeros(len(fpkIdx))
+
+
     fitEPSP = np.zeros( len( epsp ) + ALPHAWINDOW * 2 )
     lastPP = 0.0
     lastIdx = 0
@@ -113,11 +168,51 @@ def parseRow( df, cell ):
             foundPks.append( ascale )
             foundIdx.append( idx )
 
-    return pkIdx, foundIdx, foundPks, foundFpks
+    if doFieldFitPlot:
+        plt.figure( figsize = (30, 5 ))
+        plt.plot( tepsp, field )
+        print( "LENS = ", len( fpks ), len(pkIdx), np.median( field ) )
+        plt.scatter( np.array(pkIdx)/SAMPLE_FREQ, 
+                -np.array(fpks) -np.median(field), c = "red", s = 20 )
+        plt.show()
 
-
+    return pkIdx, fpks, foundIdx, foundPks 
 
 def panelBC_pkVsTime( ax1, ax2, df ):
+    idx = 0
+    cellStats = {}
+    cellList = df['cellID'].unique()
+    for cellIdx, cell in enumerate( cellList ):
+        if cell == 4001:
+            continue
+        alphaTab, alphaDelay, pkDelay = setFittingParams( cell )
+        dcell = df.loc[df["cellID"] == cell]
+        ipat = dcell["patternList"].astype(int)
+        patList = ipat.unique()
+        pk5 = {}
+        pk15 = {}
+        for pp in patList:
+            dpat = dcell.loc[ipat == pp]
+            sweepList = dpat['sweep'].unique()
+            for ss in sweepList:
+                dsweep = dpat.loc[ dpat['sweep'] == ss ]
+                seqList = dsweep['exptSeq'].unique()
+                for seq in seqList:
+                    dseq = dsweep.loc[dsweep['exptSeq'] == seq]
+                    print( "{}, cell{}, pat{}, sweep{}, seq{}".format( 
+                        idx, cell, pp, ss, seq ) )
+                    idx += 1
+                    pkIdx, fpks, foundIdx, foundPks = parseRow( dseq, cell )
+                    #print( "SUM = ", sum( foundIdx ) )
+                    print( foundIdx[1:10] )
+                    if len( pkIdx ) == 0:
+                        continue
+                    if pp in [46,47,48,49,50]:
+                        pk5[pp] = [foundIdx, foundPks, pkIdx]
+                    else:
+                        pk15[pp] = [foundIdx, foundPks, pkIdx]
+    
+        cellStats[cell] = [pk5, pk15]
     return
 
 def panelA_SampleTrace( ax, dcell ):
