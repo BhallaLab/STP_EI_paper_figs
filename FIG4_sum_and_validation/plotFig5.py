@@ -84,7 +84,46 @@ def findPeaks( pulseTrig, pulseThresh, pkDelay, Vm, width = 0.002 ):
 
     return pkIdx, pks
 
-def plotSampleTrace( ax, df, alphaTab, alphaDelay, pkDelay ):
+def parseRow( df, cell ):
+    alphaTab, alphaDelay, pkDelay = setFittingParams( cell )
+    pulseTrig = np.array(df.iloc[0, SAMPLE_START + 2*NUM_SAMPLES:SAMPLE_START+3*NUM_SAMPLES ] )
+    pulseThresh = ( min( pulseTrig ) + max( pulseTrig ) ) / 2.0
+    if pulseThresh < MINIMUM_PULSE_THRESH:
+        return [], [], 0
+    epsp = np.array(df.iloc[0, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ])
+    field = np.array(df.iloc[0, SAMPLE_START + 3*NUM_SAMPLES:SAMPLE_START+4*NUM_SAMPLES ] )
+
+    baseline = min( np.percentile(epsp, 25 ), 0.0 )
+    epsp -= baseline # hack to handle traces with large ipsps.
+    tepsp = np.linspace( 0, 11, len(epsp) )
+    pkIdx, pks = findPeaks( pulseTrig, pulseThresh, pkDelay, epsp )
+    fpkIdx, fpks = findPeaks( pulseTrig, pulseThresh, 90, np.median(field)-field, width = 0.001 )
+    fitEPSP = np.zeros( len( epsp ) + ALPHAWINDOW * 2 )
+    lastPP = 0.0
+    lastIdx = 0
+    foundPks = []
+    foundIdx = []
+    for idx, pp in zip( pkIdx, pks ):
+        ii = idx + alphaDelay
+        ascale = pp - lastPP*longAlpha[int(ALPHATAU1*2) + idx-lastIdx]
+        if ascale > 0:
+            fitEPSP[ii:ii+ALPHAWINDOW] += ascale * alphaTab
+            lastIdx = idx
+            lastPP = pp
+            foundPks.append( ascale )
+            foundIdx.append( idx )
+
+    return pkIdx, foundIdx, foundPks, foundFpks
+
+
+
+def panelBC_pkVsTime( ax1, ax2, df ):
+    return
+
+def panelA_SampleTrace( ax, dcell ):
+    ipat = dcell["patternList"].astype(int)
+    df = dcell.loc[(ipat == 46) & (dcell['sweep'] == 12)]
+    alphaTab, alphaDelay, pkDelay = setFittingParams( 4041 )
     PLOTLEN = 2.0
     pulseTrig = np.array(df.iloc[0, SAMPLE_START + 2*NUM_SAMPLES:SAMPLE_START+3*NUM_SAMPLES ] )
     pulseThresh = ( min( pulseTrig ) + max( pulseTrig ) ) / 2.0
@@ -94,8 +133,6 @@ def plotSampleTrace( ax, df, alphaTab, alphaDelay, pkDelay ):
     field = np.array(df.iloc[0, SAMPLE_START + 3*NUM_SAMPLES:SAMPLE_START+4*NUM_SAMPLES ] )
 
     baseline = min( np.percentile(epsp, 25 ), 0.0 )
-    print( "baseline={:.3f}, pulseThresh = {:.6f}".format( 
-        baseline, pulseThresh ) )
     epsp -= baseline # hack to handle traces with large ipsps.
     tepsp = np.linspace( 0, 11, len(epsp) )
     pkIdx, pks = findPeaks( pulseTrig, pulseThresh, pkDelay, epsp )
@@ -208,7 +245,7 @@ def doStats( df, alphaTab, alphaDelay, pkDelay, pattern = None ):
         fig.tight_layout()
         plt.show()
 
-    return np.array(foundIdx), np.array(foundPks), len( pkIdx )
+    return np.array(foundIdx), np.array(foundPks), np.array(pkIdx)
 
 def analyze( ax1, ax2, ax3, cell, pks, label ):
     totPks = np.array( [] )
@@ -271,19 +308,15 @@ def setFittingParams( cell ):
         alphaTab = alphaTab / max( alphaTab )
         alphaDelay = int( 0.005 * SAMPLE_FREQ )
         pkDelay = int( 0.015 * SAMPLE_FREQ )
-        doPlot = False
     else:
         alphaTab = ALPHA
         alphaDelay = ALPHADELAY
         pkDelay = PKDELAY
-        doPlot = False
-    return alphaTab, alphaDelay, pkDelay, doPlot
+    return alphaTab, alphaDelay, pkDelay
 
 def main():
     global pulseTrig
     global pulseThresh
-    global doPlot
-
 
     plt.rcParams.update( {"font.size": 24} )
     fig = plt.figure( figsize = (10,15) )
@@ -293,12 +326,19 @@ def main():
     # Set up the stimulus timings
     df = pandas.read_hdf( patternData )
     cellList = df['cellID'].unique()
+    dcell4041 = df.loc[df["cellID"] == 4041]
+    ax = fig.add_subplot( gs[0,:] )
+    panelA_SampleTrace( ax, dcell4041 )
+    ax1 = fig.add_subplot( gs[1,0] )
+    ax2 = fig.add_subplot( gs[1,1] )
+    panelBC_pkVsTime( ax1, ax2, df )
+    '''
     idx = 0
+    cellStats = {}
     for cellIdx, cell in enumerate( cellList ):
         if cell == 4001:
             continue
-        alphaTab, alphaDelay, pkDelay, doPlot = setFittingParams( cell )
-
+        alphaTab, alphaDelay, pkDelay = setFittingParams( cell )
         dcell = df.loc[df["cellID"] == cell]
         ipat = dcell["patternList"].astype(int)
         patList = ipat.unique()
@@ -319,16 +359,19 @@ def main():
                         idx, cell, pp, ss, seq ) )
                     break
                     idx += 1
-                    foundIdx, foundPks, totNumPulse = doStats( 
+                    foundIdx, foundPks, pkIdx = doStats( 
                         dseq, alphaTab, alphaDelay, pkDelay, pattern = pp)
-                    if totNumPulse == 0:
+                    if len( pkIdx ) == 0:
                         continue
                     if pp in [46,47,48,49,50]:
-                        pk5[pp] = [foundIdx, foundPks, totNumPulse]
+                        pk5[pp] = [foundIdx, foundPks, pkIdx]
                     else:
-                        pk15[pp] = [foundIdx, foundPks, totNumPulse]
+                        pk15[pp] = [foundIdx, foundPks, pkIdx]
+    
+        cellStats[cell] = [pk5, pk15]
         #analyze( ax[0][cellIdx], ax[1][cellIdx], ax[2][cellIdx], cell, pk5, "5 Sq" )
         #analyze( ax[0][cellIdx], ax[1][cellIdx], ax[2][cellIdx], cell, pk15, "15 Sq")
+    '''
     
     fig.tight_layout()
     plt.show()
