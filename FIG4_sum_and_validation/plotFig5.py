@@ -331,6 +331,7 @@ def scanData( df ):
     pk15 = []
     fpk5 = []
     fpk15 = []
+    patDict = { pp:[] for pp in [46,47,48,49,50,52,53,55] } # 8 patterns.
     for cellIdx, cell in enumerate( cellList ):
         if cell == 4001:
             continue
@@ -351,6 +352,7 @@ def scanData( df ):
                     idx += 1
                     fpks, epks = parseRow( dseq, cell )
                     #print( "SUM = ", sum( foundIdx ) )
+                    patDict[pp].append( [fpks, epks] )
                     if pp in [46,47,48,49,50]:
                         pk5.append(epks)
                         if cell == 4041: # The only one with field data
@@ -361,7 +363,46 @@ def scanData( df ):
                         if cell == 4041: # The only one with field data
                             fpk15.append( [fpks, epks] )
     
-    return pk5, pk15, fpk5, fpk15
+    return pk5, pk15, fpk5, fpk15, patDict
+
+def panelHI_varianceHisto( ax1, ax2, patDict ):
+    totfvar = []
+    totevar = []
+    for pattern in [46,47,48,49,50]:
+        if len( patDict[pattern] ) > 2:
+            ff = np.array([ pp[0] for pp in patDict[pattern] ])
+            fvar = np.var( ff, axis = 0 )
+            totfvar.extend( fvar )
+            ee = np.array([ pp[1] for pp in patDict[pattern] ])
+            evar = np.var( ee, axis = 0 )
+            totevar.extend( evar )
+    ax1.hist( totfvar, bins = 20, alpha = 0.5, label = "5 sq", histtype = "step", linewidth = 2, edgecolor = "blue" )
+    ax2.hist( totevar, bins = 20, alpha = 0.5, label = "15 sq", histtype = "step", linewidth = 2, edgecolor = "blue" )
+
+    totfvar = []
+    totevar = []
+    for pattern in [52, 53, 55]:
+        if len( patDict[pattern] ) > 2:
+            ff = np.array([ pp[0] for pp in patDict[pattern] ])
+            fvar = np.var( ff, axis = 0 )
+            totfvar.extend( fvar )
+            ee = np.array([ pp[1] for pp in patDict[pattern] ])
+            evar = np.var( ee, axis = 0 )
+            totevar.extend( evar )
+    totfvar = np.array( totfvar )
+    totfvar = totfvar[totfvar > 0]
+    ax1.hist( totfvar, bins = 20, alpha = 0.5, label = "5 sq", histtype = "step", linewidth = 2, edgecolor = "orange" )
+    ax2.hist( totevar, bins = 20, alpha = 0.5, label = "15 sq", histtype = "step", linewidth = 2, edgecolor = "orange" )
+    ax1.spines['top'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
+    ax1.set_xlabel( "var:field EPSP" )
+    ax1.set_ylabel( "#" )
+    ax1.text( -0.20, 1.05, "H", fontsize = 22, weight = "bold", transform=ax1.transAxes )
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
+    ax2.set_xlabel( "var:EPSP" )
+    ax2.set_ylabel( "#" )
+    ax2.text( -0.20, 1.05, "I", fontsize = 22, weight = "bold", transform=ax2.transAxes )
 
 def setFittingParams( cell ):
     if cell == 521:
@@ -379,9 +420,9 @@ def main():
     global pulseTrig
     global pulseThresh
 
-    plt.rcParams.update( {"font.size": 24} )
-    fig = plt.figure( figsize = (10,15) )
-    gs = fig.add_gridspec( 4, 2 ) # 4 rows, 2 cols
+    plt.rcParams.update( {"font.size": 20} )
+    fig = plt.figure( figsize = (10,18) )
+    gs = fig.add_gridspec( 5, 2 ) # 4 rows, 2 cols
     #fig, ax = plt.subplots( nrows = 3, ncols=3, figsize = (18, 15) )
 
     # Set up the stimulus timings
@@ -389,13 +430,14 @@ def main():
     ax = fig.add_subplot( gs[0,:] )
     dcell4041 = df.loc[df["cellID"] == 4041]
     panelA_SampleTrace( ax, dcell4041 )
-    pk5, pk15, fpk5, fpk15 = scanData( df )
+    pk5, pk15, fpk5, fpk15, patDict = scanData( df )
     panelB_probVsTime( fig.add_subplot(gs[1,0]), pk5, pk15 )
     panelC_epspVsTime( fig.add_subplot(gs[1,1]), pk5, pk15 )
     panelDE_epspVsField( fig.add_subplot(gs[2,0]), fpk5, "D" )
     panelDE_epspVsField( fig.add_subplot(gs[2,1]), fpk15, "E" )
     panelF_fpkHisto( fig.add_subplot(gs[3,0]), fpk5, fpk15 )
     panelG_epkHisto( fig.add_subplot(gs[3,1]), pk5, pk15 )
+    panelHI_varianceHisto( fig.add_subplot(gs[4,0]), fig.add_subplot(gs[4,1]), patDict )
     
     fig.tight_layout()
     plt.show()
