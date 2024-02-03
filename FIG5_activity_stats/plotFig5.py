@@ -212,6 +212,37 @@ def panelC_epspVsTime( ax, pk5, pk15 ):
     ax.set_ylabel( "EPSP (mV )" )
     ax.text( -0.20, 1.05, "C", fontsize = 22, weight = "bold", transform=ax.transAxes )
 
+def panelX_epspVsISI( ax, pk5, pk15 ):
+    pk5 = np.array( pk5 )
+    pk15 = np.array( pk15 )
+    mean5 = np.mean( pk5, axis = 0 )
+    mean15 = np.mean( pk15, axis = 0 )
+    padt = np.pad( PulseTrain, 1)
+    isi = PulseTrain - padt[:len( PulseTrain )]
+    ax.scatter( isi[50:] / SAMPLE_FREQ, mean5[50:], color="blue", s=10, label = "5 Sq" )
+    ax.scatter( isi[50:] / SAMPLE_FREQ, mean15[50:], color="orange", s=10, label = "15 Sq" )
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.set_xlabel( "ISI (s)" )
+    ax.set_ylabel( "EPSP (mV )" )
+    ax.text( -0.20, 1.05, "X", fontsize = 22, weight = "bold", transform=ax.transAxes )
+
+def panelY_fepspVsISI( ax, fpk5, fpk15 ):
+    pk5 = np.array( pk5 )
+    pk15 = np.array( pk15 )
+    mean5 = np.mean( pk5, axis = 0 )
+    mean15 = np.mean( pk15, axis = 0 )
+    padt = np.pad( PulseTrain, 1)
+    isi = PulseTrain - padt[:len( PulseTrain )]
+    ax.scatter( isi[50:] / SAMPLE_FREQ, mean5[50:], color="blue", s=10, label = "5 Sq" )
+    ax.scatter( isi[50:] / SAMPLE_FREQ, mean15[50:], color="orange", s=10, label = "15 Sq" )
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.set_xlabel( "ISI (s)" )
+    ax.set_ylabel( "EPSP (mV )" )
+    ax.text( -0.20, 1.05, "X", fontsize = 22, weight = "bold", transform=ax.transAxes )
+
+
 def panelDE_epspVsField( ax, fpk, label ):
     print( "LEN = ", len( fpk ) )
     color = "orange" if label == "E" else "blue"
@@ -431,7 +462,8 @@ def main():
     dcell4041 = df.loc[df["cellID"] == 4041]
     panelA_SampleTrace( ax, dcell4041 )
     pk5, pk15, fpk5, fpk15, patDict = scanData( df )
-    panelB_probVsTime( fig.add_subplot(gs[1,0]), pk5, pk15 )
+    #panelB_probVsTime( fig.add_subplot(gs[1,0]), pk5, pk15 )
+    panelX_epspVsISI(  fig.add_subplot(gs[1,0]), pk5, pk15 )
     panelC_epspVsTime( fig.add_subplot(gs[1,1]), pk5, pk15 )
     panelDE_epspVsField( fig.add_subplot(gs[2,0]), fpk5, "D" )
     panelDE_epspVsField( fig.add_subplot(gs[2,1]), fpk15, "E" )
