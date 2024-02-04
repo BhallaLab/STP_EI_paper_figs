@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 import rdesigneur as rd
+import multiprocessing
+from pathlib import Path
 import argparse
 
 freq = 80.0 # Hz
@@ -40,14 +42,14 @@ pulseTrig = []
 pulseThresh = 0.001
 patternData = "../../../2022/VC_DATA/all_cells_SpikeTrain_CC_long.h5"
 SAMPLE_FREQ = 20000
+elecDt = 0.00005
 chemDt = 0.0005
-#SAMPLE_TIME = 11
-SAMPLE_TIME = 2
+SAMPLE_TIME = 11
+#SAMPLE_TIME = 2
 NUM_SAMPLES = SAMPLE_FREQ * SAMPLE_TIME
 SAMPLE_START = 49
 SWEEP = 16
 patternDict2 = {}
-patternIdx = 46
 
 PulseTrain = np.array([4001,10684,11276,11603,13433,15914,16193,17131,19457,19827,20561,21153,21578,
     22460,24407,24665,25093,25667,26213,26726,27343,28046,28625,29322,29608,31223,31729,32400,32756,
@@ -65,6 +67,10 @@ PulseTrain = np.array([4001,10684,11276,11603,13433,15914,16193,17131,19457,1982
     174728,175182,175694,176340,177236,178437,179524,180446,183258,183781,185319,187213,189396,190365,
     190837,191267,191619,192282,192848,193144,193689,194521,195822,196751,197884,199981,200689,201095,
     202108,203280,204018,205585,206552,207234,207796,209126,209832])
+
+TRIG = np.zeros( NUM_SAMPLES )
+for ii in PulseTrain:
+    TRIG[ii] = 1.0
 
 ReducedPulseIdx = np.zeros( round(11 * SAMPLE_FREQ / 10 ), dtype=int )
 for pp in PulseTrain:
@@ -179,6 +185,44 @@ def patternDict():
             'I': np.array( patternI, dtype = float)
             }
 
+pandasColumnNames = [
+                 'cellID',              'sex',         'ageAtInj',
+              'ageAtExpt',       'incubation',             'unit',
+               'location',         'protocol',          'exptSeq',
+                 'exptID',            'sweep',         'stimFreq',
+                  'numSq',        'intensity',       'pulseWidth',
+              'clampMode',   'clampPotential',        'condition',
+                     'AP',               'IR',              'tau',
+          'sweepBaseline',      'numPatterns',      'patternList',
+              'numPulses',  'pulseTrainStart',  'probePulseStart',
+       'frameChangeTimes',       'pulseTimes',      'sweepLength',
+           'baselineFlag',           'IRFlag',           'RaFlag',
+            'spikingFlag',         'ChR2Flag',        'fieldData',
+             'peaks_cell',  'peaks_cell_norm',         'auc_cell',
+             'slope_cell',       'delay_cell',      'peaks_field',
+       'peaks_field_norm',         'cell_fpr',        'field_fpr',
+               'cell_ppr',        'cell_stpr',        'field_ppr',
+             'field_stpr'
+]
+
+colIdx = { nn:idx for idx, nn in enumerate( pandasColumnNames )}
+
+def makeRow( pattern, repeat, data, args ):
+    row = [0]*SAMPLE_START + list( data[:NUM_SAMPLES] ) + [0.0]*NUM_SAMPLES + list(TRIG) + [0.0]*NUM_SAMPLES
+    row[colIdx['exptSeq']] = repeat
+    row[colIdx["patternList"]] = pattern
+    row[colIdx["numSq"]] = 5 if pattern < 51 else 15
+    row[colIdx["sweep"]] = pattern * args.numRepeats + repeat
+    row[colIdx["clampMode"]] = "VC" if args.voltage_clamp else "CC"
+    # Do clampPotential
+    row[colIdx["intensity"]] = 100
+    row[colIdx["protocol"]] = "SpikeTrain"
+
+    return row
+
+
+
+
 def generatePatterns( seed ):
     global inputs
     global CA3_Inter
@@ -250,12 +294,12 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
     KGbar = 450.0 if spiking else 3.5
 
     rdes = rd.rdesigneur(
-        elecDt = 50e-6,
+        elecDt = elecDt,
         chemDt = chemDt,
         funcDt = 0.0005,
         diffDt = 0.0005,
         chemPlotDt = 0.0005,
-        elecPlotDt = 0.0005,
+        elecPlotDt = elecDt,
         diffusionLength = 1e-3, # ensure single chem compt
         useGssa = useGssa,
         # cellProto syntax: ['ballAndStick', 'name', somaDia, somaLength, dendDia, dendLength, numDendSeg]
@@ -313,7 +357,7 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
     moose.element( '/library/GABA' ).Ek = -0.07 # Tweak Erev.
     rdes.buildModel()
     if useGssa:
-        moose.showfield( "/model/chem/glu/ksolve" )
+        #moose.showfield( "/model/chem/glu/ksolve" )
         moose.element( "/model/chem/glu/ksolve" ).useClockedUpdate = 1
         moose.element( "/model/chem/GABA/ksolve" ).useClockedUpdate = 1
     # Here we can add a few messages from the periodic synaptic input to the
@@ -325,19 +369,24 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
     return rdes
 
 
-def stimFunc():
-    global interState
+def stimFunc( patternIdx ):
     t = moose.element( '/clock' ).currentTime
     # Need to look up if this is time to generate pulse. 
     idx = int(round( t/chemDt ) )
+    if idx % int( 1.0/chemDt )  == 0:   # dot every second.
+        print( ".", flush = True, end = "" )
+    if idx >= len( ReducedPulseIdx ):
+        return
     CA3isActive = (ReducedPulseIdx[idx] > 0.5) #Stimulus is to be delivered
     idx2 = int( round( (t - GABAdelay) / chemDt ) )
+    if idx2 >= len( ReducedPulseIdx ):
+        return
     InterIsActive = ( ReducedPulseIdx[idx2] > 0.5 )
     gluInput = moose.vec( "/model/chem/glu/Ca_ext" )
     gabaInput = moose.vec( "/model/chem/GABA/Ca_ext" )
     thresh = 2.0
     if CA3isActive:
-        print( "Trig CA3 at {:.3f} {} with {}".format( t, idx, patternIdx ))
+        #print( "Trig CA3 at {:.3f} {} with {}".format( t, idx, patternIdx ))
         ca3cells = moose.vec( "/model/elec/CA3/soma" )
         ca3cells.Vm = patternDict2[patternIdx]
         Inter = moose.vec( "/model/elec/Inter/soma" )
@@ -351,18 +400,14 @@ def stimFunc():
         '''
     else:
         moose.vec( "/model/elec/CA3/soma" ).Vm = 0.0
-        #moose.vec( "/model/elec/Inter/soma" ).Vm = 0.0
         gluInput.concInit = basalCa
 
     if InterIsActive:
         Inter = moose.vec( "/model/elec/Inter/soma" )
         gabaInput.concInit = (np.matmul( Inter_CA1, Inter.Vm ) >= thresh_Inter_CA1 ) * stimAmpl
-        interState = 1
     else:
         gabaInput.concInit = basalCa
-        if interState == 1:
-            interState = 0
-            moose.vec( "/model/elec/Inter/soma" ).Vm = 0
+        moose.vec( "/model/elec/Inter/soma" ).Vm = 0
     #print( "{:.4f}  CA3={}, Inter={}, pattern={}".format( t, CA3isActive, InterIsActive, patternIdx))
 
 def makeNetwork( rdes ):
@@ -370,35 +415,7 @@ def makeNetwork( rdes ):
     CA3cells, CA3args = makeInputs( "CA3", 20e-6 )
     interneurons, interneuronArgs = makeInputs( "Inter", 70e-6 )
 
-def main():
-    global freq
-    global firstPlotEntry
-    global stimList
-    global numPulses
-    global numSq
-    global pInter_CA1
-    global pulseTrig
-    global pulseThresh
-
-    parser = argparse.ArgumentParser( description = "Deliver patterned stims to neuron with short-term-plasticity in E and I synapses" )
-    parser.add_argument( "-p", "--pattern", type = int, help = "Index of pattern. 5-sq patterns are 46 to 50. 15 sq patterns are 52, 53, 55. Default = 46", default = 46 )
-    parser.add_argument( '-spk', '--spiking', action="store_true", help ='Flag: when set, use high Na/K channel densities in soma to get spiking.' )
-    parser.add_argument( '-v', '--voltage_clamp', action="store_true", help ='Flag: when set, do voltage clamp for glu and GABA currents respectively.')
-    parser.add_argument( '-d', '--deterministic', action="store_true", help ='Flag: when set, use deterministic ODE solver. Normally uses GSSA stochastic solver.')
-    parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn75.g" )
-    parser.add_argument( "-s", "--seed", type = int, help = "Optional: Seed to use for random numbers both for Python and for MOOSE.", default = 1234 )
-    parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=1", default = 1.0 )
-    parser.add_argument( "-vGABA", "--volGABA", type = float, help = "Optional: Volume scaling factor for GABA synapses. Default=0.5", default = 0.5 )
-    parser.add_argument( "-ic", "--inhibitoryConvergence", type = float, help = "Optional: Convergence of projections from Inh interneurons to inhibitory synapses on CA1. Default=1.0 ", default = 1.0 )
-    args = parser.parse_args()
-    ret = innerMain( args )
-    plt.figure()
-    plt.plot( ret )
-    plt.show()
-
-
 def innerMain( args ):
-    global patternIdx
     patternIdx = args.pattern
     pInter_CA1 = args.inhibitoryConvergence / 256.0
     if args.voltage_clamp:
@@ -413,19 +430,19 @@ def innerMain( args ):
     rdes = buildModel( args.modelName, args.seed, not args.deterministic, args.volGlu, args.volGABA, args.spiking )
     pr = moose.PyRun( "/model/stims/stimRun" )
     #pr.initString = 'print(freq)'
-    pr.runString = 'stimFunc()'
+    pr.runString = 'stimFunc({})'.format( patternIdx )
     pr.tick = 14 # This would be chemDt. Which is currently 0.5 ms.
 
     makeNetwork( rdes )
 
     moose.reinit()
+    '''
     print( "NumGluR = ", len( moose.vec('/model/chem/glu/glu') ),
         "  NumGABA sites = ", 
         len(moose.vec( '/model/chem/GABA/GABA' )) )
     print( "NumSpines = ", len(moose.wildcardFind( '/model/elec/head#' )),
             "  NumGABA sites = ", 
             len(moose.wildcardFind( '/model/chem/GABA/GABA[]' )) )
-    '''
     '''
     runtime = SAMPLE_TIME
 
@@ -444,7 +461,72 @@ def innerMain( args ):
         plot0 = moose.element( '/model/graphs/plot0' ).vector
         plot0[:10] = GABAR_clamp_offset / 1e12  # clear out transient
 
-    return plot0
+    return (plot0, patternIdx, args.repeatIdx, args.seed)
+
+def runSession( args ):
+    fname = "{}_{}_{}_{}.h5".format( Path( args.outputFile ).stem, args.inhibitoryConvergence, args.pCA3_CA1, args.pCA3_Inter )
+    print( "Working on: ", fname )
+    pool = multiprocessing.Pool( processes = args.numProcesses )
+    ret = []
+    data = []
+    argdict = vars( args )
+    #for pattern in [46,47,48,49,50,52,53,55]:
+    for pattern in [46,55]:
+        argdict["pattern"] = pattern
+        for ii in range( args.numRepeats ):
+            argdict["repeatIdx"] = ii
+            argdict["seed"] = args.seed + pattern * args.numRepeats + ii
+            print( "Launching {}.{}".format( pattern, ii ) )
+            innerArgs = argparse.Namespace( **argdict )
+            ret.append( pool.apply_async( innerMain, args = (innerArgs, )))
+    for rr in ret:
+        (plot0, patternIdx, repeatIdx, seed) = rr.get()
+        data.append( makeRow( patternIdx, repeatIdx, plot0, args ) )
+        '''
+        print( "DATA LEN = ", len( data[-1]), len( plot0 ) )
+        data.append( plot0 )
+        plt.figure( figsize = (10, 5 ))
+        plt.plot( plot0 )
+        plt.title( "pattern={}.{}, seed={}".format( patternIdx, repeatIdx, seed ) )
+        plt.show()
+        '''
+    df = pandas.DataFrame(data, columns=pandasColumnNames + [str(i) for i in range( NUM_SAMPLES *4 ) ] )
+    #df.to_hdf( args.outputFile, "SimData", mode = "w", format='table', complevel=9)
+    df.to_hdf( fname, "SimData", mode = "w", complevel=9)
+
+def main():
+    global freq
+    global firstPlotEntry
+    global stimList
+    global numPulses
+    global numSq
+    global pInter_CA1
+    global pulseTrig
+    global pulseThresh
+
+    parser = argparse.ArgumentParser( description = "Deliver patterned stims to neuron with short-term-plasticity in E and I synapses" )
+    parser.add_argument( "-n", "--numProcesses", type = int, help = "Number of processes to launch, default = 1", default = 1 )
+    parser.add_argument( "-nr", "--numRepeats", type = int, help = "Number of repeats for each pattern, default = 1", default = 1 )
+    parser.add_argument( "-p", "--pattern", type = int, help = "Index of pattern. 5-sq patterns are 46 to 50. 15 sq patterns are 52, 53, 55. Default = 46", default = 46 )
+    parser.add_argument( '-spk', '--spiking', action="store_true", help ='Flag: when set, use high Na/K channel densities in soma to get spiking.' )
+    parser.add_argument( '-v', '--voltage_clamp', action="store_true", help ='Flag: when set, do voltage clamp for glu and GABA currents respectively.')
+    parser.add_argument( '-d', '--deterministic', action="store_true", help ='Flag: when set, use deterministic ODE solver. Normally uses GSSA stochastic solver.')
+    parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn75.g" )
+    parser.add_argument( "-s", "--seed", type = int, help = "Optional: Seed to use for random numbers both for Python and for MOOSE.", default = 1234 )
+    parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=1", default = 1.0 )
+    parser.add_argument( "-vGABA", "--volGABA", type = float, help = "Optional: Volume scaling factor for GABA synapses. Default=0.5", default = 0.5 )
+    parser.add_argument( "-ic", "--inhibitoryConvergence", type = float, help = "Optional: Convergence of projections from Inh interneurons to inhibitory synapses on CA1. Default=1.0 ", default = 1.0 )
+    parser.add_argument( "--pCA3_CA1", type = float, help = "Optional: Probability of a given CA3 cell connecting to the CA1 cell. Default=0.0002 ", default = 0.0002 )
+    parser.add_argument( "--pCA3_Inter", type = float, help = "Optional: Probability of a given CA3 cell connecting to an interneuron. Default=0.0008 ", default = 0.0008 )
+
+    parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
+    args = parser.parse_args()
+    '''
+    for args.inhibitoryConvergence in [0.1 0.2 0.5 1.0]:
+        for args.pCA3_CA1 in [0.0002, 0.0005, 0.001, 0.002]:
+            for args.pCA3_Inter in [0.0005, 0.001, 0.002, 0.005]:
+    '''
+    runSession( args )
 
     
 if __name__ == "__main__":
