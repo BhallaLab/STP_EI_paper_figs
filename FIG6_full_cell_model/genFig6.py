@@ -521,12 +521,13 @@ def main():
 
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
-    '''
-    for args.inhibitoryConvergence in [0.1 0.2 0.5 1.0]:
+    for args.inhibitoryConvergence in [0.1, 0.2, 0.5, 1.0]:
         for args.pCA3_CA1 in [0.0002, 0.0005, 0.001, 0.002]:
             for args.pCA3_Inter in [0.0005, 0.001, 0.002, 0.005]:
+                runSession( args )
     '''
     runSession( args )
+    '''
 
     
 if __name__ == "__main__":
