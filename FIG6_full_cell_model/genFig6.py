@@ -461,6 +461,8 @@ def innerMain( args ):
         plot0 = moose.element( '/model/graphs/plot0' ).vector
         plot0[:10] = GABAR_clamp_offset / 1e12  # clear out transient
 
+    moose.delete( "/model" )
+    moose.delete( "/library" )
     return (plot0, patternIdx, args.repeatIdx, args.seed)
 
 def runSession( args ):

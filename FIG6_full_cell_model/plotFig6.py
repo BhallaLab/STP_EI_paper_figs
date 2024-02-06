@@ -1,6 +1,7 @@
 import pandas
 import pylab
 import numpy as np
+import argparse
 import math
 from scipy.stats import linregress
 
@@ -40,8 +41,8 @@ repeatPatterns = False
 inputs = []
 stimList = []
 pulseTrig = []
-patternData = "../../../2022/VC_DATA/all_cells_SpikeTrain_CC_long.h5"
-patternData = "simData_1.0_0.0002_0.0008.h5"
+#patternData = "../../../2022/VC_DATA/all_cells_SpikeTrain_CC_long.h5"
+#patternData = "simData_1.0_0.0002_0.0008.h5"
 SAMPLE_FREQ = 20000
 chemDt = 0.0005
 SAMPLE_TIME = 11
@@ -356,21 +357,24 @@ def panelA_SampleTrace( ax, dcell ):
 
     tepsp = tepsp[:int(PLOTLEN*SAMPLE_FREQ)]
     pt = pulseTrig[:len(tepsp)] - 0.06
+    print( "MEAN = ", np.mean( epsp ) )
     ax.plot( tepsp, epsp[:len(tepsp)], "b", label = "Data EPSP   " )
     ax.plot( tepsp, fitEPSP[:len(tepsp)], "r", label = "Fit EPSP" )
-    ax.plot( tepsp, (field[:len(tepsp)] - 0.2) * 10, "m", label = "Field" )
-    ax.plot( tepsp, pt * 100, "g", label = "Trigger" )
-    ax.plot( [0,0,0.25], [10,5,5], color="black", linewidth=2.5 )
+    #ax.plot( tepsp, (field[:len(tepsp)] - 0.2) * 10, "m", label = "Field" )
+    ax.plot( tepsp, pt * 0.001, "g", label = "Trigger" )
+    #ax.plot( [0,0,0.25], [10,5,5], color="black", linewidth=2.5 )
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
+    '''
     ax.spines['left'].set_visible(False)
     ax.spines['bottom'].set_visible(False)
     ax.get_xaxis().set_ticks([])
     ax.get_yaxis().set_ticks([])
+    '''
     #ax.set_ylabel( "EPSP (mV)" )
     ax.legend( loc = "upper right", frameon = False, fontsize = 14 )
     ax.set_xlim( 0, PLOTLEN )
-    ax.set_ylim( -7, 10 )
+    #ax.set_ylim( -7, 10 )
     ax.text( -0.10, 1.05, "A", fontsize = 22, weight = "bold", transform=ax.transAxes )
     #ax.set_xlabel("Time (s)")
 
@@ -470,6 +474,10 @@ def setFittingParams( cell ):
 def main():
     global pulseTrig
     global pulseThresh
+    parser = argparse.ArgumentParser( description = "Read and plot sim data" )
+    parser.add_argument( "-f", "--fname", type = str, help = "Optional: Name of hdf5 pandas file with data.", default = "simData_1.0_0.0002_0.0008.h5")
+    args = parser.parse_args()
+    patternData = args.fname
 
     plt.rcParams.update( {"font.size": 20} )
     fig = plt.figure( figsize = (10,24) )
