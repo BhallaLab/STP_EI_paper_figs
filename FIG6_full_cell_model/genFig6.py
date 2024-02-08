@@ -327,7 +327,7 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
         passiveDistrib = [['soma', 'CM', '0.01', 'Em', '-0.065']],
         chemDistrib = [
             # Args: chem_model, elec_compts, mesh_type, spatial_distrib, r_scalefactor, radius_sdev
-            ['glu', 'head#', 'presyn_spine', '1', rGlu, 0 ],
+            ['glu', 'head#', 'presyn_spine', '1', rGlu, 0.5 ],
             # Args: chem_model, elec_compts, mesh_type, spatial_distrib, r_absolute, r_sdev, spacing
             ['GABA', 'dend#', 'presyn_dend', '1', 0.5e-6 * rGABA, 0, 1e-6 ],
         ],
@@ -469,14 +469,14 @@ def innerMain( args ):
     return (plot0, patternIdx, args.repeatIdx, args.seed)
 
 def runSession( args ):
-    fname = "{}_{}_{}_{}.h5".format( Path( args.outputFile ).stem, args.pInter_CA1, args.pCA3_CA1, args.pCA3_Inter )
+    fname = "{}_{}_{}_{}.h5".format( Path( args.outputFile ).stem, args.volGlu, args.pCA3_CA1, args.pCA3_Inter )
     print( "Working on: ", fname )
     pool = multiprocessing.Pool( processes = args.numProcesses )
     ret = []
     data = []
     argdict = vars( args )
-    #for pattern in [46,47,48,49,50,52,53,55]:
-    for pattern in [46,55]:
+    for pattern in [46,47,48,49,50,52,53,55]:
+    #for pattern in [46,55]:
         argdict["pattern"] = pattern
         for ii in range( args.numRepeats ):
             argdict["repeatIdx"] = ii
@@ -517,19 +517,10 @@ def main():
 
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
-    for args.pInter_CA1 in [0.002, 0.02]:
-        for args.pCA3_CA1 in [ 0.0002, 0.001]:
-            for args.pCA3_Inter in [0.0005, 0.005]:
+    for args.volGlu in [1.2, 1.6, 2.5]:
+        for args.pCA3_CA1 in [ 0.002, 0.004]:
+            for args.pCA3_Inter in [0.001, 0.002]:
                 runSession( args )
-    '''
-    for args.pInter_CA1 in [0.002, 0.005, 0.01, 0.02]:
-        for args.pCA3_CA1 in [0.0002, 0.0005, 0.001, 0.002]:
-            for args.pCA3_Inter in [0.0005, 0.001, 0.002, 0.005]:
-                runSession( args )
-    '''
-    '''
-    runSession( args )
-    '''
 
     
 if __name__ == "__main__":
