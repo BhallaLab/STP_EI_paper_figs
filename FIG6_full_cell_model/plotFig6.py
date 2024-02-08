@@ -49,12 +49,14 @@ SAMPLE_TIME = 11
 NUM_SAMPLES = SAMPLE_FREQ * SAMPLE_TIME
 SAMPLE_START = 49
 SWEEP = 16
-PKDELAY = int( 0.020 * SAMPLE_FREQ )
 EPSPTHRESH = 0.0004 # Threshold for a distinct EPSP pk. In Volts
+'''
+PKDELAY = int( 0.020 * SAMPLE_FREQ )
 ALPHATAU1 = 0.005 * SAMPLE_FREQ
 ALPHATAU2 = 0.042 * SAMPLE_FREQ
 ALPHADELAY = int( 0.010 * SAMPLE_FREQ )
-ALPHAWINDOW = int( ALPHATAU2 * 8 )
+'''
+ALPHAWINDOW = int( 0.32 * SAMPLE_FREQ )
 MINIMUM_PULSE_THRESH = 4e-4
 
 PulseTrain = np.array([4001,10684,11276,11603,13433,15914,16193,17131,19457,19827,20561,21153,21578,
@@ -84,11 +86,6 @@ def dualAlphaFunc( t, t1, t2 ):
     if abs( t1 - t2 ) < 1e-6:
         return alphaFunc( t, t1 )
     return (1.0/(t1-t2)) * (np.exp(-t/t1) - np.exp(-t/t2))
-
-ALPHA = np.array( [ dualAlphaFunc(t, ALPHATAU1, ALPHATAU2 ) for t in range( ALPHAWINDOW ) ] )
-ALPHA = ALPHA / max( ALPHA )
-longAlpha = np.zeros(NUM_SAMPLES)
-longAlpha[:ALPHAWINDOW] += ALPHA
 
 def findPeaks( pkDelay, Vm, width = 0.002 ):
     widthSamples = int( np.round( width * SAMPLE_FREQ ) )
@@ -144,8 +141,12 @@ def fftFilter( data ):
 def parseRow( df, cell ):
     # Finds the field and epsp peaks for each pulse.
     # If any are too small, it puts in a zero.
-    alphaTab, alphaDelay, pkDelay = setFittingParams( cell )
+    alphaTab, alphaDelay, pkDelay, alphaTau1, alphaTau2 = setFittingParams( cell )
+    longAlpha = np.zeros(NUM_SAMPLES)
+    longAlpha[:ALPHAWINDOW] += alphaTab
     epsp = np.array(df.iloc[0, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ])
+    if cell == 0:
+        epsp *= 1000     # Scale to mV.
     baseline = min( np.percentile(epsp, 25 ), 0.0 )
     epsp -= baseline # hack to handle traces with large ipsps.
     tepsp = np.linspace( 0, 11, len(epsp) )
@@ -165,7 +166,7 @@ def parseRow( df, cell ):
     epks = []
     for idx, pp in zip( PulseTrain, pks ):
         ii = idx + alphaDelay
-        ascale = pp - lastPP*longAlpha[int(ALPHATAU1*2) + idx-lastIdx]
+        ascale = pp - lastPP*longAlpha[int(alphaTau1*2) + idx-lastIdx]
         if ascale > 0:
             fitEPSP[ii:ii+ALPHAWINDOW] += ascale * alphaTab
             lastIdx = idx
@@ -186,7 +187,7 @@ def parseRow( df, cell ):
     assert( len( fpks ) == len( PulseTrain ) )
     return fpks, epks 
 
-def panelB_probVsTime( ax, pk5, pk15 ):
+def panelC_probVsTime( ax, column, pk5, pk15 ):
     pk5 = np.array( pk5 )
     pk15 = np.array( pk15 )
     pk5 = (pk5 > EPSPTHRESH)
@@ -199,9 +200,11 @@ def panelB_probVsTime( ax, pk5, pk15 ):
     ax.spines['right'].set_visible(False)
     ax.set_xlabel( "Time (s)" )
     ax.set_ylabel( "Probability (%)" )
-    ax.text( -0.20, 1.05, "B", fontsize = 22, weight="bold", transform=ax.transAxes )
+    ax.set_ylim( -5, 105 )
+    label = chr( ord("C") + column )
+    ax.text( -0.20, 1.05, label, fontsize = 22, weight="bold", transform=ax.transAxes )
 
-def panelC_epspVsTime( ax, pk5, pk15 ):
+def panelE_epspVsTime( ax, column, pk5, pk15 ):
     pk5 = np.array( pk5 )
     pk15 = np.array( pk15 )
     mean5 = np.mean( pk5, axis = 0 )
@@ -210,42 +213,13 @@ def panelC_epspVsTime( ax, pk5, pk15 ):
     ax.scatter( PulseTrain / SAMPLE_FREQ, mean15, color="orange", s=10, label = "15 Sq" )
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
+    ax.set_ylim( -0.2, 5.1 )
     ax.set_xlabel( "Time (s)" )
     ax.set_ylabel( "EPSP (mV )" )
-    ax.text( -0.20, 1.05, "C", fontsize = 22, weight = "bold", transform=ax.transAxes )
+    label = chr( ord("E") + column )
+    ax.text( -0.20, 1.05, label, fontsize = 22, weight = "bold", transform=ax.transAxes )
 
-
-def panelD_fepspVsISI( ax, fpk5, fpk15 ):
-    all5 = np.array( [ ff for ff, ee in fpk5 ] )
-    all15 = np.array( [ ff for ff, ee in fpk15 ] )
-    mean5 = np.mean( all5, axis = 0 )
-    mean15 = np.mean( all15, axis = 0 )
-    padt = np.pad( PulseTrain, 1)
-    isi = PulseTrain - padt[:len( PulseTrain )]
-    ax.scatter( isi/ SAMPLE_FREQ, mean5, color="blue", s=10, label = "5 Sq" )
-    ax.scatter( isi/ SAMPLE_FREQ, mean15, color="orange", s=10, label = "15 Sq" )
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.set_xlabel( "ISI (s)" )
-    ax.set_ylabel( "fEPSP (mV )" )
-    ax.set_xlim( -0.01, 0.2 )
-    ax.text( -0.20, 1.05, "D", fontsize = 22, weight = "bold", transform=ax.transAxes )
-
-
-def panelX_ebyfVsTime( ax, fpk5, fpk15 ):
-    all5 = np.array( [ np.array(ee)/np.array(ff) for ff, ee in fpk5 ] )
-    all15 = np.array( [ np.array(ee)/np.array(ff) for ff, ee in fpk15 ] )
-    mean5 = np.mean( all5, axis = 0 )
-    mean15 = np.mean( all15, axis = 0 )
-    ax.scatter( PulseTrain/ SAMPLE_FREQ, mean5, color="blue", s=10, label = "5 Sq" )
-    ax.scatter( PulseTrain/ SAMPLE_FREQ, mean15, color="orange", s=10, label = "15 Sq" )
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.set_xlabel( "Time (s)" )
-    ax.set_ylabel( "epsp/field" )
-    ax.text( -0.20, 1.05, "X", fontsize = 22, weight = "bold", transform=ax.transAxes )
-
-def panelE_epspVsISI( ax, pk5, pk15 ):
+def panelG_epspVsISI( ax, column, pk5, pk15 ):
     pk5 = np.array( pk5 )
     pk15 = np.array( pk15 )
     mean5 = np.mean( pk5, axis = 0 )
@@ -256,58 +230,14 @@ def panelE_epspVsISI( ax, pk5, pk15 ):
     ax.scatter( isi / SAMPLE_FREQ, mean15, color="orange", s=10, label = "15 Sq" )
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
+    ax.set_ylim( -0.2, 5.1 )
     ax.set_xlabel( "ISI (s)" )
     ax.set_ylabel( "EPSP (mV )" )
     ax.set_xlim( -0.01, 0.2 )
-    ax.text( -0.20, 1.05, "E", fontsize = 22, weight = "bold", transform=ax.transAxes )
-
-
-def panelFG_epspVsField( ax, fpk, label ):
-    print( "LEN = ", len( fpk ) )
-    color = "orange" if label == "G" else "blue"
-
-    allf = []
-    alle = []
-    for f, e in fpk:
-        print( "innerLEN = ", len( f ), len( e ) )
-        allf.extend( f )
-        alle.extend( e )
-    allf = np.array( allf )
-    alle = np.array( alle )
-    mask = (allf > 0) & (alle > 0 )
-    allf = allf[mask]
-    alle = alle[mask]
-    ax.scatter( allf, alle, color = color, s = 10 )
-    fit = linregress( allf, alle )
-    # slope, intercept, r-value, p-value, stderr of p_value
-    ax.plot( [0.05, 0.35],[fit[0]*0.05+fit[1], fit[0]*0.35+fit[1]], color="black" )
-
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.set_xlabel( "Field EPSP (mV)" )
-    ax.set_ylabel( "EPSP (mV)" )
-    ax.set_ylim( -0.05, 8 )
-    ax.set_xlim( -0.01, 0.35 )
-    ax.text( 0.10, 0.95, "r={:.2f}".format(fit[2]), fontsize = 16, transform=ax.transAxes )
+    label = chr( ord("G") + column )
     ax.text( -0.20, 1.05, label, fontsize = 22, weight = "bold", transform=ax.transAxes )
 
-
-def panelH_fpkHisto( ax, fpk5, fpk15 ):
-    allf5 = []
-    allf15 = []
-    for f, e in fpk5:
-        allf5.extend( f )
-    for f, e in fpk15:
-        allf15.extend( f )
-    ax.hist( allf5, bins = 20, alpha = 0.5, label = "5 sq", histtype = "step", linewidth = 2, color = "blue" )
-    ax.hist( allf15, bins = 20, alpha = 0.5, label = "15 sq", histtype = "step", linewidth = 2, color = "orange" )
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.set_xlabel( "field EPSP (mV )" )
-    ax.set_ylabel( "#" )
-    ax.text( -0.20, 1.05, "H", fontsize = 22, weight = "bold", transform=ax.transAxes )
-
-def panelI_epkHisto( ax, pk5, pk15 ):
+def panelI_epkHisto( ax, column, pk5, pk15 ):
     pk5 = np.array( pk5 ).flatten()
     pk5 = pk5[pk5 > EPSPTHRESH]
     pk15 = np.array( pk15 ).flatten()
@@ -316,22 +246,31 @@ def panelI_epkHisto( ax, pk5, pk15 ):
     ax.hist( pk15, bins = 20, alpha = 0.5, label = "15 sq", histtype = "step", linewidth = 2, edgecolor = "orange" )
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
+    ax.set_xlim( -0.5, 12 )
     ax.set_xlabel( "EPSP (mV )" )
     ax.set_ylabel( "#" )
-    ax.text( -0.20, 1.05, "I", fontsize = 22, weight = "bold", transform=ax.transAxes )
+    label = chr( ord("I") + column )
+    ax.text( -0.20, 1.05, label, fontsize = 22, weight = "bold", transform=ax.transAxes )
 
-def panelA_SampleTrace( ax, dcell ):
+def panelA_SampleTrace( ax, dcell, column ):
     ipat = dcell["patternList"].astype(int)
     #df = dcell.loc[(ipat == 46) & (dcell['sweep'] == 12)]
     df = dcell.loc[(ipat == 46)]
-    print( df.shape )
-    alphaTab, alphaDelay, pkDelay = setFittingParams( 4041 )
-    PLOTLEN = 2.0
+    cell = df['cellID'].unique()[0]
+    #print( df.shape )
+    alphaTab, alphaDelay, pkDelay, alphaTau1, alphaTau2 = setFittingParams( cell )
+    longAlpha = np.zeros(NUM_SAMPLES)
+    longAlpha[:ALPHAWINDOW] += alphaTab
+    PLOTLEN = 6.0
     pulseTrig = np.array(df.iloc[0, SAMPLE_START + 2*NUM_SAMPLES:SAMPLE_START+3*NUM_SAMPLES ] )
     pulseThresh = ( min( pulseTrig ) + max( pulseTrig ) ) / 2.0
     if pulseThresh < MINIMUM_PULSE_THRESH:
         return [], [], 0
     epsp = np.array(df.iloc[0, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ])
+    if cell == 0:
+        epsp *= 1000
+    else:
+        pulseTrig *= 100
     field = np.array(df.iloc[0, SAMPLE_START + 3*NUM_SAMPLES:SAMPLE_START+4*NUM_SAMPLES ] )
 
     baseline = min( np.percentile(epsp, 25 ), 0.0 )
@@ -345,7 +284,7 @@ def panelA_SampleTrace( ax, dcell ):
     foundIdx = []
     for idx, pp in zip( PulseTrain, pks ):
         ii = idx + alphaDelay
-        ascale = pp - lastPP*longAlpha[int(ALPHATAU1*2) + idx-lastIdx]
+        ascale = pp - lastPP*longAlpha[int(alphaTau1*2) + idx-lastIdx]
         if ascale > 0:
             fitEPSP[ii:ii+ALPHAWINDOW] += ascale * alphaTab
             lastIdx = idx
@@ -356,12 +295,12 @@ def panelA_SampleTrace( ax, dcell ):
     runtime = settleTime + SAMPLE_TIME + postStim
 
     tepsp = tepsp[:int(PLOTLEN*SAMPLE_FREQ)]
-    pt = pulseTrig[:len(tepsp)] - 0.06
+    pt = pulseTrig[:len(tepsp)] -5
     print( "MEAN = ", np.mean( epsp ) )
     ax.plot( tepsp, epsp[:len(tepsp)], "b", label = "Data EPSP   " )
     ax.plot( tepsp, fitEPSP[:len(tepsp)], "r", label = "Fit EPSP" )
     #ax.plot( tepsp, (field[:len(tepsp)] - 0.2) * 10, "m", label = "Field" )
-    ax.plot( tepsp, pt * 0.001, "g", label = "Trigger" )
+    ax.plot( tepsp, pt, "g", label = "Trigger" )
     #ax.plot( [0,0,0.25], [10,5,5], color="black", linewidth=2.5 )
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -371,11 +310,13 @@ def panelA_SampleTrace( ax, dcell ):
     ax.get_xaxis().set_ticks([])
     ax.get_yaxis().set_ticks([])
     '''
-    #ax.set_ylabel( "EPSP (mV)" )
-    ax.legend( loc = "upper right", frameon = False, fontsize = 14 )
+    ax.set_ylabel( "EPSP (mV)" )
+    ax.set_xlabel( "Time (s)" )
+    ax.legend( loc = "upper right", ncol=3, frameon=False, fontsize = 14 )
     ax.set_xlim( 0, PLOTLEN )
     #ax.set_ylim( -7, 10 )
-    ax.text( -0.10, 1.05, "A", fontsize = 22, weight = "bold", transform=ax.transAxes )
+    label = chr( ord("A") + column )
+    ax.text( -0.10, 1.05, label, fontsize = 22, weight = "bold", transform=ax.transAxes )
     #ax.set_xlabel("Time (s)")
 
 def scanData( df ):
@@ -390,7 +331,7 @@ def scanData( df ):
     for cellIdx, cell in enumerate( cellList ):
         if cell == 4001:
             continue
-        alphaTab, alphaDelay, pkDelay = setFittingParams( cell )
+        alphaTab, alphaDelay, pkDelay, alphaTau1, alphaTau2 = setFittingParams( cell )
         dcell = df.loc[df["cellID"] == cell]
         ipat = dcell["patternList"].astype(int)
         patList = ipat.unique()
@@ -417,92 +358,92 @@ def scanData( df ):
                         pk15.append(epks)
                         if cell == 4041: # The only one with field data
                             fpk15.append( [fpks, epks] )
-    
+
     return pk5, pk15, fpk5, fpk15, patDict
 
-def panelJK_varianceHisto( ax1, ax2, patDict ):
-    totfvar = []
+def panelK_varianceHisto( ax, column, patDict ):
     totevar = []
     for pattern in [46,47,48,49,50]:
         if len( patDict[pattern] ) > 2:
-            ff = np.array([ pp[0] for pp in patDict[pattern] ])
-            fvar = np.var( ff, axis = 0 )
-            totfvar.extend( fvar )
-            ee = np.array([ pp[1] for pp in patDict[pattern] ])
-            evar = np.var( ee, axis = 0 )
-            totevar.extend( evar )
-    ax1.hist( totfvar, bins = 20, alpha = 0.5, label = "5 sq", histtype = "step", linewidth = 2, edgecolor = "blue" )
-    ax2.hist( totevar, bins = 20, alpha = 0.5, label = "15 sq", histtype = "step", linewidth = 2, edgecolor = "blue" )
-
-    totfvar = []
-    totevar = []
-    for pattern in [52, 53, 55]:
-        if len( patDict[pattern] ) > 2:
-            ff = np.array([ pp[0] for pp in patDict[pattern] ])
-            fvar = np.std( ff, axis = 0 )
-            totfvar.extend( fvar )
             ee = np.array([ pp[1] for pp in patDict[pattern] ])
             evar = np.std( ee, axis = 0 )
             totevar.extend( evar )
-    totfvar = np.array( totfvar )
-    totfvar = totfvar[totfvar > 0]
-    ax1.hist( totfvar, bins = 20, alpha = 0.5, label = "5 sq", histtype = "step", linewidth = 2, edgecolor = "orange" )
-    ax2.hist( totevar, bins = 20, alpha = 0.5, label = "15 sq", histtype = "step", linewidth = 2, edgecolor = "orange" )
-    ax1.spines['top'].set_visible(False)
-    ax1.spines['right'].set_visible(False)
-    ax1.set_xlabel( "std:field EPSP" )
-    ax1.set_ylabel( "#" )
-    ax1.text( -0.20, 1.05, "J", fontsize = 22, weight = "bold", transform=ax1.transAxes )
-    ax2.spines['top'].set_visible(False)
-    ax2.spines['right'].set_visible(False)
-    ax2.set_xlabel( "std:EPSP" )
-    ax2.set_ylabel( "#" )
-    ax2.text( -0.20, 1.05, "K", fontsize = 22, weight = "bold", transform=ax2.transAxes )
+    ax.hist( totevar, bins = 20, alpha = 0.5, label = "5 sq", histtype = "step", linewidth = 2, edgecolor = "blue" )
+
+    totevar = []
+    for pattern in [52, 53, 55]:
+        if len( patDict[pattern] ) > 2:
+            ee = np.array([ pp[1] for pp in patDict[pattern] ])
+            evar = np.std( ee, axis = 0 )
+            totevar.extend( evar )
+    ax.hist( totevar, bins = 20, alpha = 0.5, label = "15 sq", histtype = "step", linewidth = 2, edgecolor = "orange" )
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.set_xlim( -0.5, 4.2 )
+    ax.set_xlabel( "std:EPSP" )
+    ax.set_ylabel( "#" )
+    label = chr( ord( "K" ) + column )
+    ax.text( -0.20, 1.05, label, fontsize = 22, weight = "bold", transform=ax.transAxes )
 
 def setFittingParams( cell ):
+    alphaTau1 = 0.005 * SAMPLE_FREQ
+    alphaTau2 = 0.042 * SAMPLE_FREQ
+    alphaDelay = int( 0.01 * SAMPLE_FREQ )
+    pkDelay = int( 0.020 * SAMPLE_FREQ )
     if cell == 521:
-        alphaTab = np.array( [ dualAlphaFunc(t, ALPHATAU1, 0.018*SAMPLE_FREQ ) for t in range( ALPHAWINDOW ) ] )
-        alphaTab = alphaTab / max( alphaTab )
+        alphaTau2 = 0.018 * SAMPLE_FREQ
         alphaDelay = int( 0.005 * SAMPLE_FREQ )
         pkDelay = int( 0.015 * SAMPLE_FREQ )
-    else:
-        alphaTab = ALPHA
-        alphaDelay = ALPHADELAY
-        pkDelay = PKDELAY
-    return alphaTab, alphaDelay, pkDelay
+    elif cell == 0: # Simulated
+        alphaTau1 = 0.010 * SAMPLE_FREQ
+        alphaTau2 = 0.040 * SAMPLE_FREQ
+        alphaDelay = int( 0.004 * SAMPLE_FREQ )
+        pkDelay = int( 0.023 * SAMPLE_FREQ )
+    else: # Use defaults from above
+        pass
+
+    alphaTab = np.array( [ dualAlphaFunc(t, alphaTau1, alphaTau2 ) for t in range( ALPHAWINDOW ) ] )
+    alphaTab = alphaTab / max( alphaTab )
+    return alphaTab, alphaDelay, pkDelay, alphaTau1, alphaTau2
 
 def main():
-    global pulseTrig
-    global pulseThresh
     parser = argparse.ArgumentParser( description = "Read and plot sim data" )
-    parser.add_argument( "-f", "--fname", type = str, help = "Optional: Name of hdf5 pandas file with data.", default = "simData_1.0_0.0002_0.0008.h5")
+    parser.add_argument( "fname", type = str, help = "Required: Name of hdf5 pandas file with data.")
+    parser.add_argument( "-f2", "--fname2", type = str, help = "Optional: Name of another hdf5 pandas file with data." )
     args = parser.parse_args()
-    patternData = args.fname
-
+    df = pandas.read_hdf( args.fname )
     plt.rcParams.update( {"font.size": 20} )
     fig = plt.figure( figsize = (10,24) )
-    gs = fig.add_gridspec( 6, 2 ) # 4 rows, 2 cols
-    #fig, ax = plt.subplots( nrows = 3, ncols=3, figsize = (18, 15) )
+    gs = fig.add_gridspec( 7, 2 ) # 7 rows, 2 cols
+    plotFrame( gs, fig, args, df, 0, 0 )
+    if args.fname2:
+        df2 = pandas.read_hdf( args.fname2 )
+        # Here we check if it is real or synth data
+        plotFrame( gs, fig, args, df2, 1, 0 )
+    fig.tight_layout()
+    plt.show()
+
+
+def plotFrame(gs, fig, args, df, column = 0, cell = 0):
+    global pulseTrig
+    global pulseThresh
 
     # Set up the stimulus timings
-    df = pandas.read_hdf( patternData )
-    ax = fig.add_subplot( gs[0,:] )
+    ax = fig.add_subplot( gs[column,:] ) # Hack: col 0 comes in row 0, col 1 in row 2
+    panelA_SampleTrace( ax, df, column )
     #dcell4041 = df.loc[df["cellID"] == 4041]
-    panelA_SampleTrace( ax, df )
     pk5, pk15, fpk5, fpk15, patDict = scanData( df )
     print( "LENGTHS = ", len( pk5 ), len( pk15 ), len( fpk5 ), len( fpk15 ) )
-    panelB_probVsTime( fig.add_subplot(gs[1,0]), pk5, pk15 )
-    panelC_epspVsTime( fig.add_subplot(gs[1,1]), pk5, pk15 )
+    panelC_probVsTime( fig.add_subplot(gs[2,column]), column, pk5, pk15 )
+    panelE_epspVsTime( fig.add_subplot(gs[3,column]), column, pk5, pk15 )
     #panelD_fepspVsISI(  fig.add_subplot(gs[2,0]), fpk5, fpk15 )
-    panelE_epspVsISI(  fig.add_subplot(gs[2,1]), pk5, pk15 )
+    panelG_epspVsISI(  fig.add_subplot(gs[4,column]), column, pk5, pk15 )
     #panelFG_epspVsField( fig.add_subplot(gs[3,0]), fpk5, "F" )
     #panelFG_epspVsField( fig.add_subplot(gs[3,1]), fpk15, "G" )
     #panelH_fpkHisto( fig.add_subplot(gs[4,0]), fpk5, fpk15 )
-    panelI_epkHisto( fig.add_subplot(gs[4,1]), pk5, pk15 )
-    panelJK_varianceHisto( fig.add_subplot(gs[5,0]), fig.add_subplot(gs[5,1]), patDict )
+    panelI_epkHisto( fig.add_subplot(gs[5,column]), column, pk5, pk15 )
+    panelK_varianceHisto( fig.add_subplot(gs[6,column]), column, patDict )
     
-    fig.tight_layout()
-    plt.show()
 
 if __name__ == "__main__":
     main()

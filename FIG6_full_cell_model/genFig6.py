@@ -30,7 +30,13 @@ numCA1Exc = 100
 numCA1Inh = 200
 pCA3_CA1 = 0.0002
 pCA3_Inter = 0.0008
-pInter_CA1 = 1.0/256.0
+pInter_CA1 = 0.004
+
+#used as globals. 
+CA3_CA1 = 0.0002
+CA3_Inter = 0.0008
+Inter_CA1 = 0.004
+
 interState = 0
 thresh_CA3_Inter = 0.9999   # Avoid doing exact float comparisons to cross thresh.
 thresh_CA3_CA1 = 0.9999
@@ -72,7 +78,7 @@ TRIG = np.zeros( NUM_SAMPLES )
 for ii in PulseTrain:
     TRIG[ii] = 1.0
 
-ReducedPulseIdx = np.zeros( round(11 * SAMPLE_FREQ / 10 ), dtype=int )
+ReducedPulseIdx = np.zeros( round(SAMPLE_TIME / chemDt ), dtype=int )
 for pp in PulseTrain:
     ReducedPulseIdx[round(pp / 10)] = 1
 
@@ -223,19 +229,18 @@ def makeRow( pattern, repeat, data, args ):
 
 
 
-def generatePatterns( seed ):
-    global inputs
-    global CA3_Inter
+def generatePatterns( args ):
     global CA3_CA1
+    global CA3_Inter
     global Inter_CA1
     global patternDict2
     pd = patternDict()
 
     # Assumes all are random projections.
-    np.random.seed( seed )
-    CA3_Inter = (np.random.rand( 256, 256 ) < pCA3_Inter) * 1.0
-    CA3_CA1 = (np.random.rand( numCA1Exc, 256 ) < pCA3_CA1) * 1.0
-    Inter_CA1 = (np.random.rand( numCA1Inh, 256 ) < pInter_CA1) * 1.0
+    np.random.seed( args.seed )
+    CA3_Inter = (np.random.rand( 256, 256 ) < args.pCA3_Inter) * 1.0
+    CA3_CA1 = (np.random.rand( numCA1Exc, 256 ) < args.pCA3_CA1) * 1.0
+    Inter_CA1 = (np.random.rand( numCA1Inh, 256 ) < args.pInter_CA1) * 1.0
 
     patternDict2 = {
         46:np.append(pd["A"].reshape(8,8).repeat(2, axis=0).reshape(-1), np.zeros(128)),
@@ -306,8 +311,8 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
         cellProto = [['ballAndStick', 'soma',  10e-6, 10e-6, 2e-6, 200e-6, 1]],
         spineProto = [['makeActiveSpine()', 'spine']],
         spineDistrib = [
-            # Put 100 spines, 2 um apart
-            ['spine', 'dend#', '2e-6', '-1e-6']  
+            # Put 100 spines, 2 um apart, with size scale 1, size sdev 0.5
+            ['spine', 'dend#', '2e-6', '-1e-6', '1', '0.5']  
             ],
         chemProto = [
             ['Models/{}'.format( presynModelName ), 'chem'],
@@ -389,8 +394,6 @@ def stimFunc( patternIdx ):
         #print( "Trig CA3 at {:.3f} {} with {}".format( t, idx, patternIdx ))
         ca3cells = moose.vec( "/model/elec/CA3/soma" )
         ca3cells.Vm = patternDict2[patternIdx]
-        Inter = moose.vec( "/model/elec/Inter/soma" )
-        Inter.Vm = (np.matmul( CA3_Inter, ca3cells.Vm ) >= thresh_CA3_Inter ) * 1.0
         gluInput.concInit = (np.matmul( CA3_CA1, ca3cells.Vm ) >= thresh_CA3_CA1 ) * stimAmpl
         '''
         print( "MEAN CA3_Inter = ", np.mean( np.matmul( CA3_Inter, ca3cells.Vm ) ),
@@ -404,6 +407,7 @@ def stimFunc( patternIdx ):
 
     if InterIsActive:
         Inter = moose.vec( "/model/elec/Inter/soma" )
+        Inter.Vm = (np.matmul( CA3_Inter, patternDict2[patternIdx]) >= thresh_CA3_Inter ) * 1.0
         gabaInput.concInit = (np.matmul( Inter_CA1, Inter.Vm ) >= thresh_Inter_CA1 ) * stimAmpl
     else:
         gabaInput.concInit = basalCa
@@ -417,7 +421,6 @@ def makeNetwork( rdes ):
 
 def innerMain( args ):
     patternIdx = args.pattern
-    pInter_CA1 = args.inhibitoryConvergence / 256.0
     if args.voltage_clamp:
         stimList = [['soma', '1', '.', 'vclamp', '-0.070' ]]
         firstPlotEntry = ['soma', '1', 'vclamp', 'current','Vclamp current']
@@ -425,7 +428,7 @@ def innerMain( args ):
     else:
         firstPlotEntry = ['soma', '1', '.', 'Vm', 'Membrane potential']
 
-    generatePatterns( args.seed )
+    generatePatterns( args )
 
     rdes = buildModel( args.modelName, args.seed, not args.deterministic, args.volGlu, args.volGABA, args.spiking )
     pr = moose.PyRun( "/model/stims/stimRun" )
@@ -466,7 +469,7 @@ def innerMain( args ):
     return (plot0, patternIdx, args.repeatIdx, args.seed)
 
 def runSession( args ):
-    fname = "{}_{}_{}_{}.h5".format( Path( args.outputFile ).stem, args.inhibitoryConvergence, args.pCA3_CA1, args.pCA3_Inter )
+    fname = "{}_{}_{}_{}.h5".format( Path( args.outputFile ).stem, args.pInter_CA1, args.pCA3_CA1, args.pCA3_Inter )
     print( "Working on: ", fname )
     pool = multiprocessing.Pool( processes = args.numProcesses )
     ret = []
@@ -484,14 +487,6 @@ def runSession( args ):
     for rr in ret:
         (plot0, patternIdx, repeatIdx, seed) = rr.get()
         data.append( makeRow( patternIdx, repeatIdx, plot0, args ) )
-        '''
-        print( "DATA LEN = ", len( data[-1]), len( plot0 ) )
-        data.append( plot0 )
-        plt.figure( figsize = (10, 5 ))
-        plt.plot( plot0 )
-        plt.title( "pattern={}.{}, seed={}".format( patternIdx, repeatIdx, seed ) )
-        plt.show()
-        '''
     df = pandas.DataFrame(data, columns=pandasColumnNames + [str(i) for i in range( NUM_SAMPLES *4 ) ] )
     #df.to_hdf( args.outputFile, "SimData", mode = "w", format='table', complevel=9)
     df.to_hdf( fname, "SimData", mode = "w", complevel=9)
@@ -502,7 +497,6 @@ def main():
     global stimList
     global numPulses
     global numSq
-    global pInter_CA1
     global pulseTrig
     global pulseThresh
 
@@ -517,16 +511,22 @@ def main():
     parser.add_argument( "-s", "--seed", type = int, help = "Optional: Seed to use for random numbers both for Python and for MOOSE.", default = 1234 )
     parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=1", default = 1.0 )
     parser.add_argument( "-vGABA", "--volGABA", type = float, help = "Optional: Volume scaling factor for GABA synapses. Default=0.5", default = 0.5 )
-    parser.add_argument( "-ic", "--inhibitoryConvergence", type = float, help = "Optional: Convergence of projections from Inh interneurons to inhibitory synapses on CA1. Default=1.0 ", default = 1.0 )
+    parser.add_argument( "--pInter_CA1", type = float, help = "Optional: Probability of a given Interneuron connectiing to the CA1 cell. Default=0.004 ", default = 0.004 )
     parser.add_argument( "--pCA3_CA1", type = float, help = "Optional: Probability of a given CA3 cell connecting to the CA1 cell. Default=0.0002 ", default = 0.0002 )
     parser.add_argument( "--pCA3_Inter", type = float, help = "Optional: Probability of a given CA3 cell connecting to an interneuron. Default=0.0008 ", default = 0.0008 )
 
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
-    for args.inhibitoryConvergence in [0.1, 0.2, 0.5, 1.0]:
+    for args.pInter_CA1 in [0.002, 0.02]:
+        for args.pCA3_CA1 in [ 0.0002, 0.001]:
+            for args.pCA3_Inter in [0.0005, 0.005]:
+                runSession( args )
+    '''
+    for args.pInter_CA1 in [0.002, 0.005, 0.01, 0.02]:
         for args.pCA3_CA1 in [0.0002, 0.0005, 0.001, 0.002]:
             for args.pCA3_Inter in [0.0005, 0.001, 0.002, 0.005]:
                 runSession( args )
+    '''
     '''
     runSession( args )
     '''

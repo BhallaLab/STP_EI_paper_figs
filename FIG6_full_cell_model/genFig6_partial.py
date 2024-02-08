@@ -394,8 +394,6 @@ def stimFunc( patternIdx ):
         #print( "Trig CA3 at {:.3f} {} with {}".format( t, idx, patternIdx ))
         ca3cells = moose.vec( "/model/elec/CA3/soma" )
         ca3cells.Vm = patternDict2[patternIdx]
-        Inter = moose.vec( "/model/elec/Inter/soma" )
-        Inter.Vm = (np.matmul( CA3_Inter, ca3cells.Vm ) >= thresh_CA3_Inter ) * 1.0
         gluInput.concInit = (np.matmul( CA3_CA1, ca3cells.Vm ) >= thresh_CA3_CA1 ) * stimAmpl
         '''
         print( "MEAN CA3_Inter = ", np.mean( np.matmul( CA3_Inter, ca3cells.Vm ) ),
@@ -409,6 +407,7 @@ def stimFunc( patternIdx ):
 
     if InterIsActive:
         Inter = moose.vec( "/model/elec/Inter/soma" )
+        Inter.Vm = (np.matmul( CA3_Inter, patternDict2[patternIdx]) >= thresh_CA3_Inter ) * 1.0
         gabaInput.concInit = (np.matmul( Inter_CA1, Inter.Vm ) >= thresh_Inter_CA1 ) * stimAmpl
     else:
         gabaInput.concInit = basalCa
@@ -534,7 +533,8 @@ def main():
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
     for args.pInter_CA1 in [0.002, 0.005, 0.01, 0.02]:
-        for args.pCA3_CA1 in [0.0002, 0.0005, 0.001, 0.002]:
+        #for args.pCA3_CA1 in [0.0002, 0.0005, 0.001, 0.002]:
+        for args.pCA3_CA1 in [0.001,]:
             runSession( args )
     '''
     runSession( args )

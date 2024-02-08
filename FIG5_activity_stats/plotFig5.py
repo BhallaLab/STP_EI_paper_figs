@@ -419,10 +419,10 @@ def panelJK_varianceHisto( ax1, ax2, patDict ):
     for pattern in [46,47,48,49,50]:
         if len( patDict[pattern] ) > 2:
             ff = np.array([ pp[0] for pp in patDict[pattern] ])
-            fvar = np.var( ff, axis = 0 )
+            fvar = np.std( ff, axis = 0 )
             totfvar.extend( fvar )
             ee = np.array([ pp[1] for pp in patDict[pattern] ])
-            evar = np.var( ee, axis = 0 )
+            evar = np.std( ee, axis = 0 )
             totevar.extend( evar )
     ax1.hist( totfvar, bins = 20, alpha = 0.5, label = "5 sq", histtype = "step", linewidth = 2, edgecolor = "blue" )
     ax2.hist( totevar, bins = 20, alpha = 0.5, label = "15 sq", histtype = "step", linewidth = 2, edgecolor = "blue" )
