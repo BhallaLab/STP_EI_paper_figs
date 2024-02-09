@@ -241,13 +241,19 @@ def generatePatterns( args ):
     CA3_Inter = (np.random.rand( 256, 256 ) < args.pCA3_Inter) * 1.0
     CA3_CA1 = (np.random.rand( numCA1Exc, 256 ) < args.pCA3_CA1) * 1.0
     Inter_CA1 = (np.random.rand( numCA1Inh, 256 ) < args.pInter_CA1) * 1.0
+    px = []
+    for char in ["A", "B", "C", "D", "E"]:
+        temp = pd[char].reshape(8,8).repeat(2, axis = 0)
+        temp2 = np.array(temp)
+        temp2[:,5:] = 0
+        px.append( np.append(temp2.reshape(-1), np.zeros(128) ) )
 
     patternDict2 = {
-        46:np.append(pd["A"].reshape(8,8).repeat(2, axis=0).reshape(-1), np.zeros(128)),
-        47:np.append(pd["B"].reshape(8,8).repeat(2, axis=0).reshape(-1), np.zeros(128)),
-        48:np.append(pd["C"].reshape(8,8).repeat(2, axis=0).reshape(-1), np.zeros(128)),
-        49:np.append(pd["D"].reshape(8,8).repeat(2, axis=0).reshape(-1), np.zeros(128)),
-        50:np.append(pd["E"].reshape(8,8).repeat(2, axis=0).reshape(-1), np.zeros(128)),
+        46:px[0],
+        47:px[1],
+        48:px[2],
+        49:px[3],
+        50:px[4],
         52:pd["F"].reshape(8,8).repeat( 4, axis=0 ).reshape(-1),
         53:pd["G"].reshape(8,8).repeat( 4, axis=0 ).reshape(-1),
         55:pd["H"].reshape(8,8).repeat( 4, axis=0 ).reshape(-1)
@@ -337,8 +343,8 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
             ['GABA', 'dend#', 'Gbar', '3.2' ]
         ],
         adaptorList = [
-            [ 'glu/glu', 'n', 'glu', 'activation', 0.0, 8000 ],
-            [ 'GABA/GABA', 'n', 'GABA', 'activation', 0.0, 8000 ],
+            [ 'glu/glu', 'n', 'glu', 'activation', 0.0, 4000 ],
+            [ 'GABA/GABA', 'n', 'GABA', 'activation', 0.0, 4000 ],
         ],
         stimList = stimList,
         plotList = [
@@ -517,7 +523,7 @@ def main():
 
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
-    for args.volGlu in [1.2, 1.6, 2.5]:
+    for args.volGlu in [1.5, 2.0, 2.5]:
         for args.pCA3_CA1 in [ 0.002, 0.004]:
             for args.pCA3_Inter in [0.001, 0.002]:
                 runSession( args )
