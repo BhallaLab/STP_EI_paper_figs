@@ -299,7 +299,7 @@ def panelG_epspVsISI( ax, pk5, pk15 ):
 
 
 def panelHI_epspVsField( ax, fpk, label ):
-    color = "orange" if label == "G" else "blue"
+    color = "orange" if label == "I" else "blue"
 
     allf = []
     alle = []
