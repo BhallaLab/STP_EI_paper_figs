@@ -137,7 +137,7 @@ def parseRow( df, cell ):
     alphaTab, alphaDelay, pkDelay, alphaTau1, alphaTau2 = setFittingParams( cell )
     longAlpha = np.zeros(NUM_SAMPLES)
     longAlpha[:ALPHAWINDOW] += alphaTab
-    epsp = -np.array(df.iloc[0, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ])
+    epsp = np.array(df.iloc[0, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ])
     baseline = min( np.percentile(epsp, 25 ), 0.0 )
     epsp -= baseline # hack to handle traces with large ipsps.
     tepsp = np.linspace( 0, 11, len(epsp) )
@@ -208,7 +208,8 @@ def panelC_epspVsTime( ax, pk5, pk15 ):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.set_xlabel( "Time (s)" )
-    ax.set_ylabel( "EPSC (mV )" )
+    ax.set_ylabel( "IPSC (pA )" )
+    ax.set_ylim( -5, 110 )
     ax.text( -0.20, 1.10, "C", fontsize = 22, weight = "bold", transform=ax.transAxes )
 
 def panelD_fepspProbVsTime( ax, fpk5, fpk15 ):
@@ -258,7 +259,7 @@ def panelF_fepspVsISI( ax, fpk5, fpk15 ):
     ax.spines['right'].set_visible(False)
     ax.set_xlabel( "ISI (s)" )
     ax.set_ylabel( "fEPSP (mV )" )
-    #ax.set_ylim( -0.01, 0.4 )
+    ax.set_ylim( -1, 25 )
     ax.set_xlim( -0.01, 0.2 )
     ax.text( -0.20, 1.10, "F", fontsize = 22, weight = "bold", transform=ax.transAxes )
 
@@ -288,8 +289,9 @@ def panelG_epspVsISI( ax, pk5, pk15 ):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.set_xlabel( "ISI (s)" )
-    ax.set_ylabel( "EPSC (pA)" )
+    ax.set_ylabel( "IPSC (pA)" )
     ax.set_xlim( -0.01, 0.2 )
+    ax.set_ylim( -5, 80 )
     ax.text( -0.20, 1.10, "G", fontsize = 22, weight = "bold", transform=ax.transAxes )
 
 
@@ -310,13 +312,13 @@ def panelHI_epspVsField( ax, fpk, label ):
     ax.scatter( allf, alle, color = color, s = 10 )
     fit = linregress( allf, alle )
     # slope, intercept, r-value, p-value, stderr of p_value
-    ax.plot( [0.0, 25],[fit[1], fit[0]*25+fit[1]], color="black" )
+    ax.plot( [0.0, 30],[fit[1], fit[0]*25+fit[1]], color="black" )
 
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.set_xlabel( "Field EPSP (mV)" )
-    ax.set_ylabel( "EPSC (pA)" )
-    #ax.set_ylim( -0.05, 8 )
+    ax.set_ylabel( "IPSC (pA)" )
+    ax.set_ylim( -10, 150 )
     #ax.set_xlim( -0.01, 0.35 )
     ax.text( 0.10, 0.95, "r={:.2f}".format(fit[2]), fontsize = 16, transform=ax.transAxes )
     ax.text( -0.20, 1.10, label, fontsize = 22, weight = "bold", transform=ax.transAxes )
@@ -346,13 +348,13 @@ def panelK_epkHisto( ax, pk5, pk15 ):
     ax.hist( pk15, bins = 20, alpha = 0.5, label = "15 sq", histtype = "step", linewidth = 2, edgecolor = "orange" )
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.set_xlabel( "EPSC (pA )" )
+    ax.set_xlabel( "IPSC (pA )" )
     ax.set_ylabel( "#" )
     ax.text( -0.20, 1.10, "K", fontsize = 22, weight = "bold", transform=ax.transAxes )
 
 def panelA_SampleTrace( ax, dcell ):
     ipat = dcell["patternList"].astype(int)
-    df = dcell.loc[(ipat == 46)]
+    df = dcell.loc[(ipat == 48)]
     alphaTab, alphaDelay, pkDelay, alphaTau1, alphaTau2 = setFittingParams( 111 )
     longAlpha = np.zeros(NUM_SAMPLES)
     longAlpha[:ALPHAWINDOW] += alphaTab
@@ -361,14 +363,14 @@ def panelA_SampleTrace( ax, dcell ):
     pulseThresh = ( min( pulseTrig ) + max( pulseTrig ) ) / 2.0
     if pulseThresh < MINIMUM_PULSE_THRESH:
         return [], [], 0
-    epsc = -np.array(df.iloc[0, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ])
+    epsc = np.array(df.iloc[0, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ])
     field = np.array(df.iloc[0, SAMPLE_START + 3*NUM_SAMPLES:SAMPLE_START+4*NUM_SAMPLES ] )
 
     baseline = min( np.percentile(epsc, 25 ), 0.0 )
     epsc -= baseline # hack to handle traces with large ipsps.
     tepsc = np.linspace( 0, 11, len(epsc) )
     pks = findPeaks( pkDelay, epsc )
-    fitEPSC = np.zeros( len( epsc ) + ALPHAWINDOW * 2 )
+    fitIPSC = np.zeros( len( epsc ) + ALPHAWINDOW * 2 )
     lastPP = 0.0
     lastIdx = 0
     foundPks = []
@@ -377,7 +379,7 @@ def panelA_SampleTrace( ax, dcell ):
         ii = idx + alphaDelay
         ascale = pp - lastPP*longAlpha[int(alphaTau1*2) + idx-lastIdx]
         if ascale > 0:
-            fitEPSC[ii:ii+ALPHAWINDOW] += ascale * alphaTab
+            fitIPSC[ii:ii+ALPHAWINDOW] += ascale * alphaTab
             lastIdx = idx
             lastPP = pp
             foundPks.append( ascale )
@@ -387,8 +389,8 @@ def panelA_SampleTrace( ax, dcell ):
 
     tepsc = tepsc[:int(PLOTLEN*SAMPLE_FREQ)]
     pt = pulseTrig[:len(tepsc)] - 0.6
-    ax.plot( tepsc, epsc[:len(tepsc)], "b", label = "Data EPSC   " )
-    ax.plot( tepsc, fitEPSC[:len(tepsc)], "r", label = "Fit EPSC" )
+    ax.plot( tepsc, epsc[:len(tepsc)], "b", label = "Data IPSC   " )
+    ax.plot( tepsc, fitIPSC[:len(tepsc)], "r", label = "Fit IPSC" )
     ax.plot( tepsc, (field[:len(tepsc)] - 40), "m", label = "Field" )
     ax.plot( tepsc, pt * 50 - 40, "g", label = "Trigger" )
     #ax.plot( [0,0,0.25], [10,5,5], color="black", linewidth=2.5 )
@@ -398,7 +400,7 @@ def panelA_SampleTrace( ax, dcell ):
     ax.spines['bottom'].set_visible(False)
     ax.get_xaxis().set_ticks([])
     #ax.get_yaxis().set_ticks([])
-    #ax.set_ylabel( "EPSC (mV)" )
+    #ax.set_ylabel( "IPSC (mV)" )
     ax.legend( loc = "upper right", frameon = False, fontsize = 14 )
     ax.set_xlim( 0, PLOTLEN )
     #ax.set_ylim( -7, 10 )
@@ -486,7 +488,7 @@ def panelLM_varianceHisto( ax1, ax2, patDict ):
     ax1.text( -0.20, 1.05, "L", fontsize = 22, weight = "bold", transform=ax1.transAxes )
     ax2.spines['top'].set_visible(False)
     ax2.spines['right'].set_visible(False)
-    ax2.set_xlabel( "std:EPSC" )
+    ax2.set_xlabel( "std:IPSC" )
     ax2.set_ylabel( "#" )
     ax2.text( -0.20, 1.05, "M", fontsize = 22, weight = "bold", transform=ax2.transAxes )
 
@@ -503,8 +505,8 @@ def setFittingParams( cell ):
     elif cell == 111:
         alphaTau1 = 0.001 * SAMPLE_FREQ
         alphaTau2 = 0.005 * SAMPLE_FREQ
-        alphaDelay = int( 0.005 * SAMPLE_FREQ )
-        pkDelay = int( 0.006 * SAMPLE_FREQ )
+        alphaDelay = int( 0.008 * SAMPLE_FREQ )
+        pkDelay = int( 0.012 * SAMPLE_FREQ )
     else:
         alphaTab = ALPHA
         alphaDelay = ALPHADELAY
@@ -526,10 +528,10 @@ def main():
 
     # Set up the stimulus timings
     df = pandas.read_hdf( patternData )
-    dfglu = df.loc[(df['clampPotential'] < -50)]
+    dfGABA = df.loc[(df['clampPotential'] > -50)]
     ax = fig.add_subplot( gs[0,:] )
-    panelA_SampleTrace( ax, dfglu )
-    pk5, pk15, fpk5, fpk15, patDict = scanData( dfglu )
+    panelA_SampleTrace( ax, dfGABA )
+    pk5, pk15, fpk5, fpk15, patDict = scanData( dfGABA )
     print( len( pk5 ), len( pk15 ), len( fpk5 ), len( fpk15 ) )
     print( len( pk5[0] ), len( pk15[0] ), len( fpk5[0] ), len( fpk15[0] ) )
     panelB_fepspVsTime( fig.add_subplot(gs[1,0]), fpk5, fpk15 )
