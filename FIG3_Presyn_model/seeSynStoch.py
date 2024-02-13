@@ -13,9 +13,7 @@ import matplotlib.image as mpimg
 import pylab
 import numpy
 import sys
-import os
-
-scriptDir = os.path.dirname( os.path.realpath( __file__ ) )
+import argparse
 
 preTime = 0.1
 stimTime = 0.002
@@ -26,18 +24,19 @@ def main():
 This example illustrates loading, and running a kinetic model
 for synaptic release.
     """
+    parser = argparse.ArgumentParser( description = "Load and run a kinetic model for synaptic release" )
+    parser.add_argument( "file", type = str, help = "Required: Name of kinetic model file in .g or SBML format")
+    parser.add_argument( '-s', '--stoch', action = "store_true", help    ='Flag: Turns on stochastic calculations.' )
+    args = parser.parse_args()
 
-    solver = "gsl"  # Pick any of gsl, gssa, ee..
-    #solver = "gssa"  # Pick any of gsl, gssa, ee..
-    runtime = 2000.0
-    fname = "Models/ExcPresyn76.g"
-    if ( len( sys.argv ) == 2 ):
-        fname = sys.argv[1]
+    solver = "gssa" if args.stoch else "gsl"
+    fname = args.file
+    transmitter = 'GABA' if fname[8] == '0' else 'glu'
     modelId = moose.loadModel( fname, 'model', solver )
     plot1 = moose.Table( '/model/graphs/Ca' )
-    moose.connect( plot1, 'requestOut', '/model/kinetics/glu/Ca', 'getN')
-    plot2 = moose.Table( '/model/graphs/glu' )
-    moose.connect( plot2, 'requestOut', '/model/kinetics/glu/glu','getN')
+    moose.connect( plot1, 'requestOut', '/model/kinetics/{}/Ca'.format(transmitter), 'getN')
+    plot2 = moose.Table( '/model/graphs/{}'.format( transmitter ) )
+    moose.connect( plot2, 'requestOut', '/model/kinetics/{}/{}'.format( transmitter, transmitter),'getN')
     # Increase volume so that the stochastic solver gssa
     # gives an interesting output
     compt = moose.element( '/model/kinetics' )
@@ -45,12 +44,14 @@ for synaptic release.
     for ii in range( 8, 20):
         moose.setClock( ii, 1e-4 ) # for the plots
 
+    Ca_ext = moose.element( '/model/kinetics/{}/Ca_ext'.format(transmitter))
+
     moose.reinit()
-    moose.element( '/model/kinetics/glu/Ca_ext' ).concInit = 80e-6
+    Ca_ext.concInit = 80e-6
     moose.start( preTime )
-    moose.element( '/model/kinetics/glu/Ca_ext' ).concInit = 50e-3
+    Ca_ext.concInit = 50e-3
     moose.start( stimTime )
-    moose.element( '/model/kinetics/glu/Ca_ext' ).concInit = 80e-6
+    Ca_ext.concInit = 80e-6
     moose.start( postTime )
 
     # Display all plots.
@@ -60,9 +61,11 @@ for synaptic release.
     fig = plt.figure( figsize=(12, 10 ) )
     ax = fig.add_subplot( 311 )
     ax.plot( t, plot1.vector[startIdx:], 'b-', label=plot1.name )
+    ax.legend()
     ax = fig.add_subplot( 312 )
     y = plot2.vector[startIdx:]
     ax.plot( t, y, 'c-', label=plot2.name )
+    ax.legend()
     ax = fig.add_subplot( 313 )
     tot = 0.0
     y2 = []
@@ -70,9 +73,9 @@ for synaptic release.
         tot += vv
         y2.append( tot )
     ax.plot( t, y2 , 'r-', label=plot2.name )
+    ax.legend()
     plt.ylabel( '# molecules' )
     plt.xlabel( 'Time (s)' )
-    pylab.legend()
     pylab.show()
 
 # Run the 'main' if this script is executed standalone.
