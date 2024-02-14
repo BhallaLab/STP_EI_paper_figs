@@ -475,7 +475,7 @@ def innerMain( args ):
     return (plot0, patternIdx, args.repeatIdx, args.seed)
 
 def runSession( args ):
-    fname = "{}_{}_{}_{}.h5".format( Path( args.outputFile ).stem, args.volGlu, args.pCA3_CA1, args.pCA3_Inter )
+    fname = "{}_{}_{}_{}_{}.h5".format( Path( args.outputFile ).stem, args.volGlu, args.pInter_CA1, args.pCA3_CA1, args.pCA3_Inter )
     print( "Working on: ", fname )
     pool = multiprocessing.Pool( processes = args.numProcesses )
     ret = []
@@ -513,7 +513,7 @@ def main():
     parser.add_argument( '-spk', '--spiking', action="store_true", help ='Flag: when set, use high Na/K channel densities in soma to get spiking.' )
     parser.add_argument( '-v', '--voltage_clamp', action="store_true", help ='Flag: when set, do voltage clamp for glu and GABA currents respectively.')
     parser.add_argument( '-d', '--deterministic', action="store_true", help ='Flag: when set, use deterministic ODE solver. Normally uses GSSA stochastic solver.')
-    parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn75.g" )
+    parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn77.g" )
     parser.add_argument( "-s", "--seed", type = int, help = "Optional: Seed to use for random numbers both for Python and for MOOSE.", default = 1234 )
     parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=1", default = 1.0 )
     parser.add_argument( "-vGABA", "--volGABA", type = float, help = "Optional: Volume scaling factor for GABA synapses. Default=0.5", default = 0.5 )
@@ -523,10 +523,11 @@ def main():
 
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
-    for args.volGlu in [1.5, 2.0, 2.5]:
-        for args.pCA3_CA1 in [ 0.002, 0.004]:
-            for args.pCA3_Inter in [0.001, 0.002]:
-                runSession( args )
+    for args.volGlu in [0.5, 2.0]:
+        for args.pInter_CA1 in [0.001, 0.004]:
+            for args.pCA3_CA1 in [ 0.001, 0.004]:
+                for args.pCA3_Inter in [0.0005, 0.002]:
+                    runSession( args )
 
     
 if __name__ == "__main__":
