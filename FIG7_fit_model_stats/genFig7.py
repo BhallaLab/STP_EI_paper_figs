@@ -31,6 +31,7 @@ numCA1Inh = 200
 pCA3_CA1 = 0.0002
 pCA3_Inter = 0.0008
 pInter_CA1 = 0.004
+fracDesensitize = 1.2 # 1/4 of CA3 cells are active early but desensitize
 
 #used as globals. 
 CA3_CA1 = 0.0002
@@ -343,8 +344,8 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
             ['GABA', 'dend#', 'Gbar', '3.2' ]
         ],
         adaptorList = [
-            [ 'glu/glu', 'n', 'glu', 'activation', 0.0, 4000 ],
-            [ 'GABA/GABA', 'n', 'GABA', 'activation', 0.0, 4000 ],
+            [ 'glu/glu', 'n', 'glu', 'activation', 0.0, 1500 ],
+            [ 'GABA/GABA', 'n', 'GABA', 'activation', 0.0, 1500 ],
         ],
         stimList = stimList,
         plotList = [
@@ -398,9 +399,14 @@ def stimFunc( patternIdx ):
     thresh = 2.0
     if CA3isActive:
         #print( "Trig CA3 at {:.3f} {} with {}".format( t, idx, patternIdx ))
+        inputPattern = patternDict2[patternIdx]
         ca3cells = moose.vec( "/model/elec/CA3/soma" )
-        ca3cells.Vm = patternDict2[patternIdx]
+        sensThresh = fracDesensitize * (2.0 - t) * sum(inputPattern)/len(inputPattern)
+        sensitization = np.zeros( len( ca3cells ) )
+        sensitization[ np.random.rand( len( ca3cells ) ) < sensThresh ] =1.0
+        ca3cells.Vm = patternDict2[patternIdx] + sensitization
         gluInput.concInit = (np.matmul( CA3_CA1, ca3cells.Vm ) >= thresh_CA3_CA1 ) * stimAmpl
+        #print( "SENSE = ", t, len( sensitization), sum( sensitization ), sum( ca3cells.Vm ), sum(gluInput.concInit ) )
         '''
         print( "MEAN CA3_Inter = ", np.mean( np.matmul( CA3_Inter, ca3cells.Vm ) ),
             " CA3_CA1 = ", np.mean( np.matmul( CA3_CA1, ca3cells.Vm ) ),
@@ -523,10 +529,10 @@ def main():
 
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
-    for args.volGlu in [0.5, 2.0]:
-        for args.pInter_CA1 in [0.001, 0.004]:
-            for args.pCA3_CA1 in [ 0.001, 0.004]:
-                for args.pCA3_Inter in [0.0005, 0.002]:
+    for args.volGlu in [0.5, 0.8]:
+        for args.pInter_CA1 in [0.002, 0.003]:
+            for args.pCA3_CA1 in [ 0.0025, 0.004]:
+                for args.pCA3_Inter in [0.0015, 0.002]:
                     runSession( args )
 
     
