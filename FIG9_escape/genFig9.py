@@ -91,24 +91,24 @@ def patternDict():
              1,0,0,0,0,0,0,1,]
 
     patternB =  [
+             0,0,0,0,0,0,0,0,
              0,1,1,1,1,1,0,0,
-             0,1,0,0,0,1,0,0,
-             0,1,0,0,0,1,0,0,
-             0,1,1,1,1,0,0,0,
-             0,1,0,0,0,1,0,0,
-             0,1,0,0,0,0,1,0,
-             0,1,1,1,1,1,0,0,
+             0,0,1,0,0,0,1,0,
+             0,0,1,1,1,1,0,0,
+             0,0,1,0,0,0,1,0,
+             0,0,1,0,0,0,1,0,
+             0,0,1,1,1,1,1,0,
              0,0,0,0,0,0,0,0,]
 
     patternC =  [
-             0,1,1,1,1,1,1,0,
-             1,1,0,0,0,0,0,1,
-             1,0,0,0,0,0,0,0,
-             1,0,0,0,0,0,0,0,
-             1,0,0,0,0,0,0,0,
-             1,0,0,0,0,0,0,0,
-             1,1,0,0,0,0,0,1,
-             0,1,1,1,1,1,1,0,]
+             0,0,0,0,0,0,0,0,
+             0,0,1,1,1,0,0,0,
+             0,1,0,0,0,1,0,0,
+             0,1,0,0,0,0,0,0,
+             0,1,0,0,0,0,0,0,
+             0,1,0,0,0,1,0,0,
+             0,0,1,1,1,0,0,0,
+             0,0,0,0,0,0,0,0,]
 
     patternD =  [
              0,0,0,0,0,0,0,0,
@@ -408,10 +408,13 @@ def stimFunc( freq ):
         inputPattern = patternDict2[46 + patternIdx]
         print( "Trig CA3 at {:.3f} with {}".format( t, patternIdx+46 ))
         ca3cells = moose.vec( "/model/elec/CA3/soma" )
+        '''
         sensThresh = fracDesensitize * (2.0 - t) * sum(inputPattern)/len(inputPattern)
         sensitization = np.zeros( len( ca3cells ) )
         sensitization[ np.random.rand( len( ca3cells ) ) < sensThresh ] =1.0
         ca3cells.Vm = inputPattern + sensitization
+        '''
+        ca3cells.Vm = inputPattern
         gluInput.concInit = (np.matmul( CA3_CA1, ca3cells.Vm ) >= thresh_CA3_CA1 ) * stimAmpl
     else:
         moose.vec( "/model/elec/CA3/soma" ).Vm = 0.0
@@ -485,7 +488,7 @@ def runSession( args ):
     for args.freq in [8, 20, 50]:
         ( plot0, args.freq ) = innerMain( args )
         data.append( makeRow( plot0*1e3, args ) )
-    fname = "{}.h5".format( Path( args.outputFile ).stem )
+    fname = "{}_{}.h5".format( Path( args.outputFile ).stem, args.seed )
     df = pandas.DataFrame(data, columns=pandasColumnNames + [str(i) for i in range( NUM_SAMPLES *4 ) ] )
     #df.to_hdf( args.outputFile, "SimData", mode = "w", format='table', complevel=9)
     df.to_hdf( fname, "SimData", mode = "w", complevel=9)
@@ -507,7 +510,7 @@ def main():
     parser.add_argument( '-v', '--voltage_clamp', action="store_true", help ='Flag: when set, do voltage clamp for glu and GABA currents respectively.')
     parser.add_argument( '-d', '--deterministic', action="store_true", help ='Flag: when set, use deterministic ODE solver. Normally uses GSSA stochastic solver.')
     parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn77.g" )
-    parser.add_argument( "-s", "--seed", type = int, help = "Optional: Seed to use for random numbers both for Python and for MOOSE.", default = 1234 )
+    parser.add_argument( "-s", "--seed", type = int, help = "Optional: Seed to use for random numbers both for Python and for MOOSE.", default = 333 )
     parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=1", default = 1.0 )
     parser.add_argument( "-vGABA", "--volGABA", type = float, help = "Optional: Volume scaling factor for GABA synapses. Default=0.5", default = 0.5 )
     parser.add_argument( "--pInter_CA1", type = float, help = "Optional: Probability of a given Interneuron connectiing to the CA1 cell. Default=0.004 ", default = 0.004 )
