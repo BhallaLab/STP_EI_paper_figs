@@ -23,7 +23,7 @@ GABAStimStr = "8e-5"
 gluR_clamp_potl = "-0.07"
 GABAR_clamp_potl = "0.0"
 GABAR_clamp_offset = 0.1    # nA
-gluConductanceScale = 0.5   # Relative to default value in the spine proto
+gluConductanceScale = 0.3   # Relative to default value in the spine proto
 gluTau2Scale = 4   # Relative to default value in the spine proto
 
 numCA1Exc = 100
@@ -96,8 +96,8 @@ def patternDict():
              0,0,1,0,0,0,1,0,
              0,0,1,1,1,1,0,0,
              0,0,1,0,0,0,1,0,
-             0,0,1,0,0,0,1,0,
-             0,0,1,1,1,1,1,0,
+             0,1,1,0,0,0,1,0,
+             0,1,1,1,1,1,1,0,
              0,0,0,0,0,0,0,0,]
 
     patternC =  [

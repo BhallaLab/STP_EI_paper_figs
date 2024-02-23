@@ -40,7 +40,12 @@ repeatPatterns = False
 inputs = []
 stimList = []
 pulseTrig = []
-patternData = "simData.h5"
+#patternData = "simData.h5"
+#patternData = "simData_12.h5"
+#patternData = "simData_11.h5"
+#patternData = "simData_111.h5"
+#patternData = "simData_222.h5"
+patternData = "simData_333.h5"
 SAMPLE_FREQ = 20000
 chemDt = 0.0005
 SAMPLE_TIME = 5
@@ -189,7 +194,7 @@ def panelC_epspVsTime( ax, pk5, ff, idx ):
     ax.spines['right'].set_visible(False)
     ax.set_xlabel( "Time (s)" )
     ax.set_ylabel( "EPSC ratio" )
-    ax.set_ylim( 0, 2.5 )
+    #ax.set_ylim( 0, 2.5 )
     label = chr( ord("B")+idx )
     ax.text( -0.20, 1.10, label, fontsize = 22, weight = "bold", transform=ax.transAxes )
 
