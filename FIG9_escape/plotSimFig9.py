@@ -2,6 +2,7 @@ import pandas
 import pylab
 import numpy as np
 import math
+import argparse
 from scipy.stats import linregress
 
 import matplotlib.pyplot as plt
@@ -123,7 +124,6 @@ def parseRow( df, cell, ff ):
     pulseTrig = np.array(df.iloc[0, SAMPLE_START+2*NUM_SAMPLES:SAMPLE_START+3*NUM_SAMPLES ] )
     if cell == 0:
         baseline = min(epsp )
-        print( "BASEline: ", baseline )
     else:
         baseline = min( np.percentile(epsp, 25 ), 0.0 )
     epsp -= baseline # hack to handle traces with large ipsps.
@@ -189,13 +189,14 @@ def panelC_epspVsTime( ax, pk5, ff, idx ):
     #ax.scatter( PulseTrain[ff / SAMPLE_FREQ, mean15, color="orange", s=10, label = "15 Sq" )
     #ax.scatter( PulseTrain[ff] / SAMPLE_FREQ, mean5, color="blue", s=10, label = "Means" )
     ax.plot( PulseTrain[ff] / SAMPLE_FREQ, mean5, color="blue", markersize=10, label = "Mean" )
-    ax.plot( PulseTrain[ff] / SAMPLE_FREQ, med5, color="red", marker = "o", markersize=10, label = "Median" )
+    ax.plot( PulseTrain[ff] / SAMPLE_FREQ, med5, color="red", markersize=10, label = "Median" )
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.set_xlabel( "Time (s)" )
     ax.set_ylabel( "EPSC ratio" )
     #ax.set_ylim( 0, 2.5 )
     label = chr( ord("B")+idx )
+    ax.text( 0.05, 0.90, str(ff)+" Hz", fontsize = 16, transform=ax.transAxes )
     ax.text( -0.20, 1.10, label, fontsize = 22, weight = "bold", transform=ax.transAxes )
 
 def panelD_fepspProbVsTime( ax, fpk5, fpk15 ):
@@ -341,7 +342,7 @@ def panelA_SampleTrace( ax, dcell ):
     #df = dcell.loc[(dcell['sweep'] == 0)]
     df = dcell.loc[(dcell['stimFreq'] == 20)]
     #print( "PPPPPP STARET ", df['probePulseStart'].unique(), df['sweepLength'].unique() )
-    print( "fct", dcell['stimFreq'] )
+    #print( "fct", dcell['stimFreq'] )
     alphaTab, alphaDelay, pkDelay, alphaTau1, alphaTau2 = setFittingParams(0)
     longAlpha = np.zeros(NUM_SAMPLES)
     longAlpha[:ALPHAWINDOW] += alphaTab
@@ -357,7 +358,6 @@ def panelA_SampleTrace( ax, dcell ):
 
     if dcell['cellID'][0] == 0:
         baseline = min(epsp )
-        print( "BASEline: ", baseline )
     else:
         baseline = min( np.percentile(epsp, 25 ), 0.0 )
     epsp -= baseline # hack to handle traces with large ipsps.
@@ -385,7 +385,7 @@ def panelA_SampleTrace( ax, dcell ):
     #ax.plot( tepsp, trig2[:len(tepsp)]*10 - 20, "m", label = "trig2" )
     ax.plot( tepsp, fitepsp[:len(tepsp)], "r", label = "Fit epsp" )
     #ax.plot( tepsp, (field[:len(tepsp)] - 40), "m", label = "Field" )
-    ax.plot( tepsp, pt * 2 - 1, "g", label = "Trigger" )
+    ax.plot( tepsp, pt * 0.5 - 1, "g", label = "Trigger" )
     #ax.plot( [0,0,0.25], [10,5,5], color="black", linewidth=2.5 )
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -394,7 +394,8 @@ def panelA_SampleTrace( ax, dcell ):
     #ax.get_xaxis().set_ticks([])
     #ax.get_yaxis().set_ticks([])
     #ax.set_ylabel( "epsp (mV)" )
-    ax.legend( loc = "upper right", frameon = False, fontsize = 14 )
+    #ax.legend( loc = "upper right", ncol=3, frameon = False, fontsize = 14 )
+    ax.legend( loc = "upper left", frameon = False, fontsize = 14 )
     #ax.set_xlim( 0, PLOTLEN )
     #ax.set_ylim( -7, 10 )
     ax.text( -0.08, 1.05, "A", fontsize = 22, weight = "bold", transform=ax.transAxes )
@@ -506,33 +507,32 @@ def setFittingParams( cell ):
 
 def main():
     global pulseTrig
-    global pulseThresh
+    parser = argparse.ArgumentParser( description = "Read and display surprise protocol data from specified file" )
+    parser.add_argument( "fname", type = str, help = "Required: File with data. Required to be hdf5." )
+    parser.add_argument( "-c", "--cellNum", type = int, help = "Optional: Cell number to select. Default: select all cells." )
+    args = parser.parse_args()
 
     plt.rcParams.update( {"font.size": 20} )
-    fig = plt.figure( figsize = (10,24) )
-    gs = fig.add_gridspec( 7, 2 ) # 4 rows, 2 cols
+    fig = plt.figure( figsize = (10,16) )
+    gs = fig.add_gridspec( 4, 2 ) # 4 rows, 2 cols
     #fig, ax = plt.subplots( nrows = 3, ncols=3, figsize = (18, 15) )
 
     # Set up the stimulus timings
-    df = pandas.read_hdf( patternData )
+    df = pandas.read_hdf( args.fname )
     cells = df['cellID'].unique()
-    #pats = df['patternList']
-    #pats = "    PATS   "
-    #print( "Uniques", df['probePulseStart'].unique(), df['sweepLength'].unique(), cells, pats )
-    #print( [len( foo ) for foo in df['patternList']] )
-    '''
-    for cc in cells:
-        cdf = df.loc[df['cellID']== cc]
-        print( cc, cdf[['sweep', 'exptSeq', 'patternList']] )
-    print( "NUM COLS = ",len( df.columns ) )
-    '''
+    if args.cellNum:
+        if args.cellNum in cells:
+            df = df.loc[df['cellID']==args.cellNum]
+        else:
+            print( "Error: selected cell '{}' not in file. Options are: {}".format( args.cellNum, cells ) )
+            quit()
     ax = fig.add_subplot( gs[0,:] )
     #celldf = df.loc[df['cellID'] == 2822]
     #celldf = df.loc[df['cellID'] == 2822]
     #celldf = df.loc[df['cellID'] == 2681]
     panelA_SampleTrace( ax, df )
     pk5, freq5 = scanData( df )
-    print( len( pk5 ) )
+    #print( len( pk5 ) )
     #print( len( pk5[0] ) )
     #panelB_fepspVsTime( fig.add_subplot(gs[1,0]), fpk5, fpk15 )
     for idx, ff in enumerate(freq5):
