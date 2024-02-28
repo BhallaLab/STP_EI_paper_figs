@@ -21,13 +21,18 @@ def simulate_A(ax, idx, tau, scale, event_interval, duration=5.0, dt=0.001):
     event_times = np.insert( event_times, 0, 0.2 )
     stim_indices = (event_times / dt).astype(int)
     stim_events[stim_indices] = 1
-    dy = 0.05
+    BasalDesensitization = 0.01
+    dy = BasalDesensitization
+    lastStim = -10.0 # long time since last event.
 
     for i in range(1, len(time)):
         stim = stim_events[i-1]
-        A[i] = A[i-1] + (1 - A[i-1]) * dt / tau - stim*A[i-1] * (1 - np.exp(-dy))
         if stim:
-            dy = scale/event_interval
+            interval = time[i-1] - lastStim
+            dy = BasalDesensitization + scale/interval
+            lastStim = time[i-1]
+            print( i, lastStim, interval )
+        A[i] = A[i-1] + (1 - A[i-1]) * dt / tau - stim*A[i-1] * (1 - np.exp(-dy))
 
     ax.plot(time, A, label='$A(t)$', color='blue')
     ax.plot(time, stim_events * 0.2 + 1.2, label='Stim', color='red')
