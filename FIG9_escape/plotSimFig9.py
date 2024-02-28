@@ -490,10 +490,10 @@ def setFittingParams( cell ):
         alphaDelay = int( 0.005 * SAMPLE_FREQ )
         pkDelay = int( 0.006 * SAMPLE_FREQ )
     elif cell == 0:
-        alphaTau1 = 0.008 * SAMPLE_FREQ
-        alphaTau2 = 0.04 * SAMPLE_FREQ
-        alphaDelay = int( 0.002 * SAMPLE_FREQ )
-        pkDelay = int( 0.020 * SAMPLE_FREQ )
+        alphaTau1 = 0.010 * SAMPLE_FREQ
+        alphaTau2 = 0.012 * SAMPLE_FREQ
+        alphaDelay = int( 0.0015 * SAMPLE_FREQ )
+        pkDelay = int( 0.016 * SAMPLE_FREQ )
     else:
         alphaTau1 = 0.002 * SAMPLE_FREQ
         alphaTau2 = 0.030 * SAMPLE_FREQ

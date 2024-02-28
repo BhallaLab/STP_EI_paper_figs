@@ -330,7 +330,10 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
         ],
         # Some changes to the default passive properties of the cell.
         #passiveDistrib = [['soma', 'CM', '0.03', 'Em', '-0.065']],
-        passiveDistrib = [['soma', 'CM', '0.01', 'Em', '-0.065']],
+        passiveDistrib = [
+            ['soma', 'RM', '1.0', 'CM', '0.01', 'Em', '-0.065'],
+            ['dend#', 'RM', '1.0', 'CM', '0.01', 'Em', '-0.065']
+        ],
         chemDistrib = [
             # Args: chem_model, elec_compts, mesh_type, spatial_distrib, r_scalefactor, radius_sdev
             ['glu', 'head#', 'presyn_spine', '1', rGlu, 0.5 ],
