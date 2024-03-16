@@ -31,7 +31,7 @@ numCA1Inh = 200
 pCA3_CA1 = 0.0002
 pCA3_Inter = 0.0008
 pInter_CA1 = 0.004
-fracDesensitize = 1.2 # 1/4 of CA3 cells are active early but desensitize
+#fracDesensitize = 1.2 # 1/4 of CA3 cells are active early but desensitize
 
 #used as globals. 
 CA3_CA1 = 0.0002
@@ -166,43 +166,43 @@ def patternDict():
 
     patternF =  [ 
              0,0,0,0,0,0,0,0,
+             1,1,1,1,1,1,1,1,
+             1,1,1,1,1,1,1,1,
+             1,1,0,0,0,0,0,0,
              1,1,1,1,1,1,1,0,
-             1,0,0,0,0,0,0,0,
-             1,0,0,0,0,0,0,0,
-             1,1,1,1,1,1,0,0,
-             1,1,1,1,1,0,0,0,
-             1,0,0,0,0,0,0,0,
-             1,0,0,0,0,0,0,0,]
+             1,1,1,1,1,1,1,0,
+             1,1,0,0,0,0,0,0,
+             1,1,0,0,0,0,0,0,]
 
     patternG =  [
              0,0,1,1,1,1,1,0,
-             0,1,0,0,0,0,0,1,
-             0,1,0,0,0,0,0,0,
-             0,1,0,0,0,1,1,0,
-             0,1,0,0,0,0,0,1,
-             0,1,0,0,0,0,0,1,
-             0,1,0,0,0,0,0,1,
+             0,1,1,1,1,1,1,1,
+             0,1,1,0,0,0,0,0,
+             0,1,1,0,0,1,1,0,
+             0,1,1,0,0,0,1,1,
+             0,1,1,0,0,0,1,1,
+             0,1,1,1,1,1,1,1,
              0,0,1,1,1,1,1,0,]
 
     patternH =  [
-             1,0,0,0,0,0,1,0,
-             1,0,0,0,0,0,1,0,
-             1,0,0,0,0,0,1,0,
+             1,1,0,0,0,1,1,0,
+             1,1,0,0,0,1,1,0,
+             1,1,0,0,0,1,1,0,
              1,1,1,1,1,1,1,0,
-             1,0,0,0,0,1,1,0,
-             1,0,0,0,0,0,1,0,
-             1,0,0,0,0,0,1,0,
-             1,0,0,0,0,0,1,0,]
+             1,1,1,1,1,1,1,0,
+             1,1,0,0,0,1,1,0,
+             1,1,0,0,0,1,1,0,
+             1,1,0,0,0,1,1,0,]
 
     patternI =  [
-             0,0,1,1,1,1,0,0,
-             0,0,0,1,1,0,0,0,
-             0,0,0,1,1,0,0,0,
-             0,0,0,1,1,0,0,0,
-             0,0,0,1,1,0,0,0,
-             0,0,0,1,1,0,0,0,
-             0,0,0,1,1,0,0,0,
-             0,1,1,1,1,1,1,0,]
+             0,1,1,1,1,1,1,0,
+             0,1,1,1,1,1,1,0,
+             0,0,0,1,1,1,0,0,
+             0,0,0,1,1,1,0,0,
+             0,0,0,1,1,1,0,0,
+             0,0,0,1,1,1,0,0,
+             1,1,1,1,1,1,1,1,
+             1,1,1,1,1,1,1,1,]
 
     return {
             '0': np.array( patternZeros, dtype = float),
@@ -405,7 +405,7 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
     return rdes
 
 
-def stimFunc( patternIdx ):
+def stimFunc( patternIdx, ChR2AmplScale ):
     t = moose.element( '/clock' ).currentTime
     # Need to look up if this is time to generate pulse. 
     idx = int(round( t/chemDt ) )
@@ -415,7 +415,7 @@ def stimFunc( patternIdx ):
         return
     CA3isActive = (ReducedPulseIdx[idx] > 0.5) #Stimulus is to be delivered
     assert( len( FracChR2active ) == len( ReducedPulseIdx ) )
-    chr2Ampl = FracChR2active[idx]
+    chr2Ampl = FracChR2active[idx] * ChR2AmplScale
     idx2 = int( round( (t - GABAdelay) / chemDt ) )
     if idx2 >= len( ReducedPulseIdx ):
         return
@@ -471,7 +471,7 @@ def innerMain( args ):
     rdes = buildModel( args.modelName, args.seed, not args.deterministic, args.volGlu, args.volGABA, args.spiking )
     pr = moose.PyRun( "/model/stims/stimRun" )
     #pr.initString = 'print(freq)'
-    pr.runString = 'stimFunc({})'.format( patternIdx )
+    pr.runString = 'stimFunc({}, {})'.format( patternIdx, args.ChR2_ampl )
     pr.tick = 14 # This would be chemDt. Which is currently 0.5 ms.
 
     makeNetwork( rdes )
@@ -507,7 +507,7 @@ def innerMain( args ):
     return (plot0, patternIdx, args.repeatIdx, args.seed)
 
 def runSession( args ):
-    fname = "{}_{}_{}_{}_{}.h5".format( Path( args.outputFile ).stem, args.volGlu, args.pInter_CA1, args.pCA3_CA1, args.pCA3_Inter )
+    fname = "{}_{}_{}_{}_{}.h5".format( Path( args.outputFile ).stem, args.volGlu, args.pInter_CA1, args.pCA3_CA1, args.ChR2_ampl )
     print( "Working on: ", fname )
     pool = multiprocessing.Pool( processes = args.numProcesses )
     ret = []
@@ -552,14 +552,16 @@ def main():
     parser.add_argument( "--pInter_CA1", type = float, help = "Optional: Probability of a given Interneuron connectiing to the CA1 cell. Default=0.004 ", default = 0.004 )
     parser.add_argument( "--pCA3_CA1", type = float, help = "Optional: Probability of a given CA3 cell connecting to the CA1 cell. Default=0.0002 ", default = 0.0002 )
     parser.add_argument( "--pCA3_Inter", type = float, help = "Optional: Probability of a given CA3 cell connecting to an interneuron. Default=0.0008 ", default = 0.0008 )
+    parser.add_argument( "--ChR2_ampl", type = float, help = "Optional: Scale factor for ChR2 stimulus amplitude.", default = 1.0 )
 
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
-    for args.volGlu in [0.5, 0.8]:
-        for args.pInter_CA1 in [0.002, 0.003]:
-            for args.pCA3_CA1 in [ 0.0025, 0.004]:
-                for args.pCA3_Inter in [0.0015, 0.002]:
-                    runSession( args )
+    for args.volGlu in [0.5]:
+        for args.pInter_CA1 in [0.003, 0.005]:
+            for args.pCA3_CA1 in [ 0.004, 0.008]:
+                for args.pCA3_Inter in [0.0015]:
+                    for args.ChR2_ampl in [6.0, 8.0, 10.0, 15.0]:
+                        runSession( args )
 
     
 if __name__ == "__main__":
