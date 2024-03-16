@@ -58,6 +58,11 @@ SAMPLE_START = 49
 SWEEP = 16
 patternDict2 = {}
 
+## Here are params for the ChR2 desensitization
+ChR2_tau = 0.4      # Tau for recovery
+ChR2_scale = 0.004  # Scaling for decrement
+ChR2_basal_desensitization = 0.01
+
 PulseTrain = np.array([4001,10684,11276,11603,13433,15914,16193,17131,19457,19827,20561,21153,21578,
     22460,24407,24665,25093,25667,26213,26726,27343,28046,28625,29322,29608,31223,31729,32400,32756,
     33317,33897,35890,36496,36986,37267,37484,38755,39890,40495,41873,42970,43399,45768,46100,46695,
@@ -83,6 +88,27 @@ ReducedPulseIdx = np.zeros( round(SAMPLE_TIME / chemDt ), dtype=int )
 for pp in PulseTrain:
     ReducedPulseIdx[round(pp / 10)] = 1
 
+
+
+def desensitization( events, dt ):
+    ampl = np.ones( len( events ) )
+    lastrr = 0
+    lastStim = -10.0    # Long time since last event.
+    lastAmpl = 1.0
+    dy = ChR2_basal_desensitization
+    for idx, rr in enumerate( events ):
+        t = idx * dt
+        lastt = t - dt
+        if rr:
+            interval = t - lastStim
+            dy = ChR2_basal_desensitization + ChR2_scale/interval
+            lastStim = t
+        lastrr = rr
+        ampl[idx] = lastAmpl + ( 1 - lastAmpl )*dt/ChR2_tau - lastrr*lastAmpl*(1-np.exp( -dy ) )
+        lastAmpl = ampl[idx]
+    return ampl
+        
+FracChR2active = desensitization( ReducedPulseIdx, chemDt )
 
 def patternDict():
     patternZeros = [0]*64
@@ -260,8 +286,6 @@ def generatePatterns( args ):
         55:pd["H"].reshape(8,8).repeat( 4, axis=0 ).reshape(-1)
     }
 
-
-
 class MooArg:
     def __init__( self, title, field ):
         self.diaScale = 1.0
@@ -390,21 +414,23 @@ def stimFunc( patternIdx ):
     if idx >= len( ReducedPulseIdx ):
         return
     CA3isActive = (ReducedPulseIdx[idx] > 0.5) #Stimulus is to be delivered
+    assert( len( FracChR2active ) == len( ReducedPulseIdx ) )
+    chr2Ampl = FracChR2active[idx]
     idx2 = int( round( (t - GABAdelay) / chemDt ) )
     if idx2 >= len( ReducedPulseIdx ):
         return
     InterIsActive = ( ReducedPulseIdx[idx2] > 0.5 )
     gluInput = moose.vec( "/model/chem/glu/Ca_ext" )
     gabaInput = moose.vec( "/model/chem/GABA/Ca_ext" )
-    thresh = 2.0
     if CA3isActive:
         #print( "Trig CA3 at {:.3f} {} with {}".format( t, idx, patternIdx ))
         inputPattern = patternDict2[patternIdx]
         ca3cells = moose.vec( "/model/elec/CA3/soma" )
-        sensThresh = fracDesensitize * (2.0 - t) * sum(inputPattern)/len(inputPattern)
-        sensitization = np.zeros( len( ca3cells ) )
-        sensitization[ np.random.rand( len( ca3cells ) ) < sensThresh ] =1.0
-        ca3cells.Vm = patternDict2[patternIdx] + sensitization
+        #sensThresh = fracDesensitize * (2.0 - t) * sum(inputPattern)/len(inputPattern)
+        #sensitization = np.zeros( len( ca3cells ) )
+        #sensitization[ np.random.rand( len( ca3cells ) ) < sensThresh ]=1.0
+        #ca3cells.Vm = patternDict2[patternIdx] + sensitization
+        ca3cells.Vm = patternDict2[patternIdx]*chr2Ampl
         gluInput.concInit = (np.matmul( CA3_CA1, ca3cells.Vm ) >= thresh_CA3_CA1 ) * stimAmpl
         #print( "SENSE = ", t, len( sensitization), sum( sensitization ), sum( ca3cells.Vm ), sum(gluInput.concInit ) )
         '''
@@ -419,7 +445,7 @@ def stimFunc( patternIdx ):
 
     if InterIsActive:
         Inter = moose.vec( "/model/elec/Inter/soma" )
-        Inter.Vm = (np.matmul( CA3_Inter, patternDict2[patternIdx]) >= thresh_CA3_Inter ) * 1.0
+        Inter.Vm = (np.matmul( CA3_Inter, patternDict2[patternIdx]*chr2Ampl) >= thresh_CA3_Inter ) * 1.0
         gabaInput.concInit = (np.matmul( Inter_CA1, Inter.Vm ) >= thresh_Inter_CA1 ) * stimAmpl
     else:
         gabaInput.concInit = basalCa
