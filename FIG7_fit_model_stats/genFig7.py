@@ -6,6 +6,8 @@ import math
 import rdesigneur as rd
 import multiprocessing
 from pathlib import Path
+from scipy.ndimage import zoom
+from scipy.ndimage import shift
 import argparse
 
 freq = 80.0 # Hz
@@ -38,9 +40,9 @@ pInter_CA1 = 0.004
 CA3_CA1 = 0.0002
 CA3_Inter = 0.0008
 Inter_CA1 = 0.004
-CA3_noise = 0.5
-Inter_noise = 0.5
-CA3_spk_thresh = 40
+CA3_noise = 0.0
+Inter_noise = 0.0
+CA3_spk_thresh = 10
 CA3_thresholded = np.zeros( numCA3 )
 
 interState = 0
@@ -67,7 +69,7 @@ patternDrivenCellActivity = {}
 ChR2_tau = 0.4      # Tau for recovery
 ChR2_scale = 0.002  # Scaling for decrement
 ChR2_basal_desensitization = 0.01
-ChR2_sigma = 1.0  # Width of lognormal deviate for ChR2 stimulus generation
+ChR2_sigma = 2.0  # Width of uniform deviate multiple for ChR2 stimulus generation
 ChR2_background = 0.05 # Width of uniform deviate for ChR2 stimulus generation
 
 PulseTrain = np.array([4001,10684,11276,11603,13433,15914,16193,17131,19457,19827,20561,21153,21578,
@@ -122,84 +124,84 @@ def patternDict():
     patternOnes = [1]*64
 
     patternA =  [
-             0,0,0,1,1,0,0,0,
-             0,0,1,0,0,1,0,0,
-             0,0,1,0,0,1,0,0,
-             0,1,0,0,0,0,1,0,
-             0,1,1,1,1,1,1,0,
-             1,1,0,0,0,0,1,1,
-             1,0,0,0,0,0,0,1,
-             1,0,0,0,0,0,0,1,]
+             0,0,0,0,0,0,0,0,
+             0,0,0,1,0,0,0,0,
+             0,0,0,0,0,1,0,0,
+             0,0,0,0,0,0,0,0,
+             0,0,1,0,0,0,1,0,
+             0,0,0,0,0,0,0,0,
+             0,0,0,0,0,0,1,0,
+             0,0,0,0,0,0,0,0,]
 
     patternB =  [
-             0,1,1,1,1,1,0,0,
-             0,1,0,0,0,1,0,0,
-             0,1,0,0,0,1,0,0,
-             0,1,1,1,1,0,0,0,
-             0,1,0,0,0,1,0,0,
+             0,0,0,0,0,0,0,0,
+             0,1,0,0,0,0,0,0,
+             0,0,0,0,0,0,0,0,
+             0,0,0,0,1,0,0,0,
+             0,0,0,0,0,0,0,0,
              0,1,0,0,0,0,1,0,
-             0,1,1,1,1,1,0,0,
+             0,0,0,1,0,0,0,0,
              0,0,0,0,0,0,0,0,]
 
     patternC =  [
-             0,1,1,1,1,1,1,0,
-             1,1,0,0,0,0,0,1,
+             0,0,0,0,0,0,1,0,
+             0,0,0,0,0,0,0,0,
+             0,0,0,1,0,0,0,0,
              1,0,0,0,0,0,0,0,
-             1,0,0,0,0,0,0,0,
-             1,0,0,0,0,0,0,0,
-             1,0,0,0,0,0,0,0,
-             1,1,0,0,0,0,0,1,
-             0,1,1,1,1,1,1,0,]
+             0,0,0,0,0,0,0,0,
+             0,0,0,0,0,0,0,0,
+             0,0,0,0,0,0,0,1,
+             0,1,0,0,0,0,0,0,]
 
     patternD =  [
              0,0,0,0,0,0,0,0,
-             1,1,1,1,1,1,0,0,
-             1,0,0,0,0,0,1,0,
-             1,0,0,0,0,0,1,0,
-             1,0,0,0,0,0,1,0,
-             1,0,0,0,0,0,1,0,
-             1,0,0,0,0,0,1,0,
-             1,1,1,1,1,1,0,0,]
+             0,0,1,0,0,1,0,0,
+             0,0,0,0,0,0,0,0,
+             0,0,0,0,0,0,1,0,
+             0,1,0,0,0,0,0,0,
+             0,0,0,0,0,0,0,0,
+             0,0,0,0,0,0,0,0,
+             0,0,0,0,0,1,0,0,]
 
     patternE =  [
-             0,1,1,1,1,1,1,0,
-             0,1,1,0,0,0,0,0,
-             0,1,1,0,0,0,0,0,
-             0,1,1,1,0,0,0,0,
              0,1,0,0,0,0,0,0,
-             0,1,0,0,0,0,0,0,
-             0,1,0,0,0,0,0,0,
-             0,1,1,1,1,1,1,0,]
+             0,0,0,0,0,0,1,0,
+             0,0,1,0,0,0,0,0,
+             0,0,0,0,0,0,0,0,
+             1,0,0,0,0,0,0,0,
+             0,0,0,0,0,0,0,0,
+             0,0,0,0,1,0,0,0,
+             0,0,0,0,0,0,0,0,]
 
     patternF =  [ 
-             0,0,0,0,0,0,0,0,
-             1,1,1,1,1,1,1,1,
-             1,1,1,1,1,1,1,1,
-             1,1,0,0,0,0,0,0,
-             1,1,1,1,1,1,1,0,
-             1,1,1,1,1,1,1,0,
-             1,1,0,0,0,0,0,0,
-             1,1,0,0,0,0,0,0,]
+             0,0,0,0,0,0,1,0,
+             0,1,0,1,0,0,0,0,
+             0,0,0,1,0,1,0,0,
+             1,0,0,0,1,0,0,0,
+             0,0,1,0,0,0,1,0,
+             0,1,0,0,0,0,1,0,
+             0,0,0,1,0,0,1,1,
+             0,1,0,0,0,0,0,0,]
 
     patternG =  [
-             0,0,1,1,1,1,1,0,
-             0,1,1,1,1,1,1,1,
-             0,1,1,0,0,0,0,0,
-             0,1,1,0,0,1,1,0,
-             0,1,1,0,0,0,1,1,
-             0,1,1,0,0,0,1,1,
-             0,1,1,1,1,1,1,1,
-             0,0,1,1,1,1,1,0,]
+             0,0,0,0,0,0,1,0,
+             0,1,1,0,0,1,0,0,
+             0,0,0,1,0,0,0,0,
+             1,0,0,0,1,0,1,0,
+             0,1,0,0,0,0,0,0,
+             0,1,0,0,0,0,1,0,
+             0,0,0,1,0,0,0,1,
+             0,1,0,0,0,1,0,0,]
 
     patternH =  [
-             1,1,0,0,0,1,1,0,
-             1,1,0,0,0,1,1,0,
-             1,1,0,0,0,1,1,0,
-             1,1,1,1,1,1,1,0,
-             1,1,1,1,1,1,1,0,
-             1,1,0,0,0,1,1,0,
-             1,1,0,0,0,1,1,0,
-             1,1,0,0,0,1,1,0,]
+             0,1,0,0,0,0,1,0,
+             0,0,1,0,0,1,1,0,
+             0,0,1,1,0,0,0,0,
+             1,0,0,0,0,0,1,0,
+             1,1,0,0,0,0,0,0,
+             0,0,0,0,0,0,0,0,
+             0,0,0,0,1,0,0,1,
+             0,1,0,0,0,1,0,0,]
 
     patternI =  [
              0,1,1,1,1,1,1,0,
@@ -271,23 +273,40 @@ def opticProjDict( patternDict2 ):
             0,0,0,1,4,1,1,0,
         ]
     ]
+    '''
     # Double the number of templates by getting mirror images.
-    proj2 = []
     for pp in proj:
         proj2.append( np.array( pp ).reshape(8,8) )
         proj2.append( np.fliplr( proj2[-1] ) )
-    # Add noise to each of the templates above to get the full list.
+    # Expand these 8x8 arrays into 16x16 ones.
+    '''
+
+    proj2 = []
+    # Zoom in each template neuron to 16x16, and add mirror image of each.
+    for pp in proj:
+        proj2.append( zoom( np.array( pp ).reshape(8,8), 2, order=1 ) )
+        proj2.append( np.fliplr( proj2[-1] ) )
+        #proj2.append( zoom( np.array( pp ).reshape(8,8), 2, order=1 ) )
+
+    # Provide offsets to move these templates around in a bigger 16x16 grid.
+    # We have above 8 templates. We need to shuffle these 32 times
+    # to get a total of 256 CA3 neurons.
     proj3 = []
     for pp in proj2:
-        for idx in range( numCA3 // len( proj2 ) ):
-            proj3.append( pp*np.random.lognormal( size=(8,8), 
-                sigma = ChR2_sigma ) + 
-                np.random.uniform( size=(8,8) ) * ChR2_background )
+        for dx in [-7, -5, -3, -1, 1, 3, 5, 7]:
+            for dy in [ -3, -1, 1, 3]:
+                proj3.append( shift(pp, shift=[dx, dy], mode='constant', cval=0) )
+
+    # Add noise to each of the templates above to get the full list.
+    for idx, pp in enumerate( proj3):
+        pp = pp*np.random.uniform( size=(16,16) ) * ChR2_sigma + np.random.uniform( size=(16,16) ) * ChR2_background
+        #print( idx, np.mean( pp ) )
+
     # multiply and sum each input pattern with the template for each neuron,
     # aka a dot product, to get an input-output matrix
     patternStim = {}
     for pat, val in patternDict2.items():
-        patternStim[pat] = np.array([ np.sum( val * pp.flatten().repeat(4) ) for pp in proj3 ])
+        patternStim[pat] = np.array([ np.sum( val * pp.flatten() ) for pp in proj3 ])
 
     return patternStim
 
@@ -343,30 +362,23 @@ def generatePatterns( args ):
     CA3_Inter = (np.random.rand( 256, 256 ) < args.pCA3_Inter) * 1.0
     CA3_CA1 = (np.random.rand( numCA1Exc, 256 ) < args.pCA3_CA1) * 1.0
     Inter_CA1 = (np.random.rand( numCA1Inh, 256 ) < args.pInter_CA1) * 1.0
-    px = []
-    for char in ["A", "B", "C", "D", "E"]:
-        '''
-        temp = np.array( pd[char].reshape(8,8) )
-        temp[:,5:] = 0
-        px.append( temp.flatten() )
-        '''
-        temp = pd[char].reshape(8,8).repeat(2, axis = 0)
-        temp2 = np.array(temp)
-        temp2[:,5:] = 0
-        px.append( np.append(temp2.reshape(-1), np.zeros(128) ) )
+    px = {}
+    for char in ["A", "B", "C", "D", "E", "F", "G", "H", "I"]:
+        orig = pd[char].reshape(8,8)
+        temp = np.zeros( (16,16), dtype = float )
+        temp[::2, ::2] = orig       # Python slicing is cool.
+        #print( char, sum( orig ), sum( temp ) )
+        px[char] = temp.flatten()
 
     patternDict2 = {
-        46:px[0],
-        47:px[1],
-        48:px[2],
-        49:px[3],
-        50:px[4],
-        #52:pd["F"],
-        #53:pd["G"],
-        #55:pd["H"]
-        52:pd["F"].reshape(8,8).repeat( 4, axis=0 ).reshape(-1),
-        53:pd["G"].reshape(8,8).repeat( 4, axis=0 ).reshape(-1),
-        55:pd["H"].reshape(8,8).repeat( 4, axis=0 ).reshape(-1)
+        46:px["A"],
+        47:px["B"],
+        48:px["C"],
+        49:px["D"],
+        50:px["E"],
+        52:px["F"],
+        53:px["G"],
+        55:px["H"],
     }
 
     patternDrivenCellActivity = opticProjDict( patternDict2 )
@@ -415,6 +427,7 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
     KGbar = 450.0 if spiking else 3.5
 
     rdes = rd.rdesigneur(
+        verbose = False,
         elecDt = elecDt,
         chemDt = chemDt,
         funcDt = 0.0005,
@@ -495,8 +508,10 @@ def stimFunc( patternIdx, ChR2AmplScale ):
     t = moose.element( '/clock' ).currentTime
     # Need to look up if this is time to generate pulse. 
     idx = int(round( t/chemDt ) )
+    '''
     if idx % int( 1.0/chemDt )  == 0:   # dot every second.
         print( ".", flush = True, end = "" )
+    '''
     if idx >= len( ReducedPulseIdx ):
         return
     CA3isActive = (ReducedPulseIdx[idx] > 0.5) #Stimulus is to be delivered
@@ -508,6 +523,8 @@ def stimFunc( patternIdx, ChR2AmplScale ):
     InterIsActive = ( ReducedPulseIdx[idx2] > 0.5 )
     gluInput = moose.vec( "/model/chem/glu/Ca_ext" )
     gabaInput = moose.vec( "/model/chem/GABA/Ca_ext" )
+    if t == chemDt:
+        print( "{}: AmplScale = {:5.2f}  ".format( patternIdx, ChR2AmplScale ) )
     if CA3isActive:
         #print( "Trig CA3 at {:.3f} {} with {}".format( t, idx, patternIdx ))
         ca3cells = moose.vec( "/model/elec/CA3/soma" )
@@ -520,8 +537,14 @@ def stimFunc( patternIdx, ChR2AmplScale ):
             np.random.normal( size=len(pdca), loc=0, scale=CA3_noise)
             ) > CA3_spk_thresh ) * 1
         ca3cells.Vm = CA3_thresholded 
-        gluInput.concInit = (np.matmul( CA3_CA1, ca3cells.Vm ) >= thresh_CA3_CA1 ) * 1
-        #print( "crampl={:.3f}, sumglu={:.3f}, #ca3cells={:.2f}, pdca={:.2f}".format( chr2Ampl, sum( gluInput.concInit ), np.sum( ca3cells.Vm ), max( pdca ) ) )
+        gluInput.concInit = (np.matmul( CA3_CA1, CA3_thresholded ) >= thresh_CA3_CA1 ) * 1
+        #print( "crampl={:.3f}, sumglu={:.3f}, #ca3cells={:.2f}, pdca={:.2f}".format( chr2Ampl, sum( gluInput.concInit ), np.sum( CA3_thresholded ), max( pdca ) ) )
+        if idx in [4, 1068, 2056, 3122, 4049, 4050]: # stimtrig values.
+            print( "{:7.2f}, {:<3d}".format( chr2Ampl, int(np.sum(CA3_thresholded)) ), end = "", flush = True )
+
+        if idx == 4050:    # end it.
+            print( "  std={:.2f}  #zero={:d}".format(np.std(CA3_thresholded), np.sum(CA3_thresholded < 0.5) ) )
+
     else:
         moose.vec( "/model/elec/CA3/soma" ).Vm = 0.0
         gluInput.concInit = basalCa
@@ -596,7 +619,7 @@ def innerMain( args ):
 
 def runSession( args ):
     fname = "{}_{}_{}_{}_{}.h5".format( Path( args.outputFile ).stem, args.volGlu, args.pInter_CA1, args.pCA3_CA1, args.ChR2_ampl )
-    print( "Working on: ", fname )
+    print( "Working on: ", fname, "\n\n\n" )
     pool = multiprocessing.Pool( processes = args.numProcesses )
     ret = []
     data = []
@@ -607,7 +630,7 @@ def runSession( args ):
         for ii in range( args.numRepeats ):
             argdict["repeatIdx"] = ii
             argdict["seed"] = args.seed + pattern * args.numRepeats + ii
-            print( "Launching {}.{}".format( pattern, ii ) )
+            #print( "Launching {}.{}".format( pattern, ii ) )
             innerArgs = argparse.Namespace( **argdict )
             ret.append( pool.apply_async( innerMain, args = (innerArgs, )))
     for rr in ret:
@@ -644,11 +667,11 @@ def main():
 
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
-    for args.volGlu in [0.5]:
+    for args.volGlu in [0.5, 0.8]:
         for args.pInter_CA1 in [0.003, 0.005]:
             for args.pCA3_CA1 in [ 0.004, 0.008]:
                 for args.pCA3_Inter in [0.0015]:
-                    for args.ChR2_ampl in [1.0, 1.2, 1.4, 1.8]
+                    for args.ChR2_ampl in [1.5, 2.0, 2.5]:
                         runSession( args )
 
     
