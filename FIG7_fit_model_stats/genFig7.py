@@ -13,7 +13,7 @@ import argparse
 freq = 80.0 # Hz
 stimDuration = 0.002   # seconds
 numPulses = 16
-stimAmpl = 5e-2     # mM
+CaStimAmpl = 2e-2     # mM. This is 20 micromolar.
 basalCa = 0.08e-3   # mM
 GABAdelay = 5.0e-3  # seconds
 width = 0.002
@@ -43,7 +43,7 @@ Inter_CA1 = 0.004
 CA3_noise = 0.0
 Inter_noise = 0.0
 CA3_spk_thresh = 10
-CA3_thresholded = np.zeros( numCA3 )
+#CA3_thresholded = np.zeros( numCA3 )
 
 interState = 0
 thresh_CA3_Inter = 0.9999   # Avoid doing exact float comparisons to cross thresh.
@@ -359,9 +359,9 @@ def generatePatterns( args ):
 
     # Assumes all are random projections.
     np.random.seed( args.seed )
-    CA3_Inter = (np.random.rand( 256, 256 ) < args.pCA3_Inter) * 1.0
-    CA3_CA1 = (np.random.rand( numCA1Exc, 256 ) < args.pCA3_CA1) * 1.0
-    Inter_CA1 = (np.random.rand( numCA1Inh, 256 ) < args.pInter_CA1) * 1.0
+    CA3_Inter = (np.random.rand( numCA1Inh, numCA3 ) < args.pCA3_Inter) * 1.0
+    CA3_CA1 = (np.random.rand( numCA1Exc, numCA3 ) < args.pCA3_CA1) * 1.0
+    Inter_CA1 = (np.random.rand( numCA1Inh, numCA1Inh ) < args.pInter_CA1) * 1.0
     px = {}
     for char in ["A", "B", "C", "D", "E", "F", "G", "H", "I"]:
         orig = pd[char].reshape(8,8)
@@ -383,6 +383,15 @@ def generatePatterns( args ):
 
     patternDrivenCellActivity = opticProjDict( patternDict2 )
 
+class History:
+    def __init__( self ):
+        self.CA3ActiveTime = -10.0
+        self.InterActiveTime = -10.0
+        self.CA3_thresholded = np.zeros( numCA3 )
+        self.Inter_thresholded = np.zeros( numCA1Inh )
+
+history = History()
+
 class MooArg:
     def __init__( self, title, field ):
         self.diaScale = 1.0
@@ -395,13 +404,13 @@ class MooArg:
         self.relpath = "."
 
 
-def makeInputs( name, xOffset ):
+def makeInputs( name, xOffset, num ):
     spacing = 2e-6
     size = spacing / 1.5
     yOffset = 15e-6
     zOffset = 0.0
     CA3 = moose.Neutral( "/model/elec/" + name )
-    CA3cells = moose.Compartment( "/model/elec/{}/soma".format(name), 256 )
+    CA3cells = moose.Compartment( "/model/elec/{}/soma".format(name), num )
     for idx, compt in enumerate( CA3cells.vec ):
         ii = idx % 16
         jj = 16 - idx // 16
@@ -504,7 +513,8 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
 
 
 def stimFunc( patternIdx, ChR2AmplScale ):
-    global CA3_thresholded
+    global history
+    #global CA3_thresholded
     t = moose.element( '/clock' ).currentTime
     # Need to look up if this is time to generate pulse. 
     idx = int(round( t/chemDt ) )
@@ -526,38 +536,47 @@ def stimFunc( patternIdx, ChR2AmplScale ):
     if t == chemDt:
         print( "{}: AmplScale = {:5.2f}  ".format( patternIdx, ChR2AmplScale ) )
     if CA3isActive:
+        history.CA3ActiveTime = t
         #print( "Trig CA3 at {:.3f} {} with {}".format( t, idx, patternIdx ))
-        ca3cells = moose.vec( "/model/elec/CA3/soma" )
         # Here I look up the activity of all cells, scale by chr2Ampl for
         # desensitization, add some noise to each cell, and decide if the
         # result of all this is over threshold for each cell.
         pdca = patternDrivenCellActivity[patternIdx]
-        CA3_thresholded = (
+        history.CA3_thresholded = (
             (pdca*chr2Ampl +
             np.random.normal( size=len(pdca), loc=0, scale=CA3_noise)
             ) > CA3_spk_thresh ) * 1
-        ca3cells.Vm = CA3_thresholded 
-        gluInput.concInit = (np.matmul( CA3_CA1, CA3_thresholded ) >= thresh_CA3_CA1 ) * 1
         #print( "crampl={:.3f}, sumglu={:.3f}, #ca3cells={:.2f}, pdca={:.2f}".format( chr2Ampl, sum( gluInput.concInit ), np.sum( CA3_thresholded ), max( pdca ) ) )
         if idx in [4, 1068, 2056, 3122, 4049, 4050]: # stimtrig values.
-            print( "{:7.2f}, {:<3d}".format( chr2Ampl, int(np.sum(CA3_thresholded)) ), end = "", flush = True )
+            print( "{:7.2f}, {:<3d}".format( chr2Ampl, int(np.sum(history.CA3_thresholded)) ), end = "", flush = True )
 
         if idx == 4050:    # end it.
-            print( "  std={:.2f}  #zero={:d}".format(np.std(CA3_thresholded), np.sum(CA3_thresholded < 0.5) ) )
+            print( "  std={:.2f}  #zero={:d}".format(np.std(history.CA3_thresholded), np.sum(history.CA3_thresholded < 0.5) ) )
 
+    if (t - history.CA3ActiveTime) < (stimDuration - 1e-6):
+        #print( "CA1Stim", t )
+        ca3cells = moose.vec( "/model/elec/CA3/soma" )
+        ca3cells.Vm = history.CA3_thresholded 
+        gluInput.concInit = (np.matmul( CA3_CA1, history.CA3_thresholded ) >= thresh_CA3_CA1 ) * CaStimAmpl
     else:
         moose.vec( "/model/elec/CA3/soma" ).Vm = 0.0
         gluInput.concInit = basalCa
 
     if InterIsActive:
-        Inter = moose.vec( "/model/elec/Inter/soma" )
-        Inter.Vm = (
+        history.InterActiveTime = t
+        history.Inter_thresholded = (
             (
-                np.matmul( CA3_Inter, CA3_thresholded) + 
+                np.matmul( CA3_Inter, history.CA3_thresholded) + 
                 np.random.normal(
-                    size=len(CA3_thresholded), loc=0, scale=Inter_noise)
+                    size=len(history.Inter_thresholded), loc=0, scale=Inter_noise)
             ) >= thresh_CA3_Inter ) * 1.0
-        gabaInput.concInit = (np.matmul( Inter_CA1, Inter.Vm ) >= thresh_Inter_CA1 ) * stimAmpl
+
+    if (t - history.InterActiveTime) < (stimDuration - 1e-6):
+        #print( "InterStim", t )
+        Inter = moose.vec( "/model/elec/Inter/soma" )
+        Inter.Vm = history.Inter_thresholded
+        #print( "LENS = ", len( gabaInput.concInit ), len( Inter_CA1 ), len( Inter.Vm ), len( history.Inter_thresholded ) )
+        gabaInput.concInit = (np.matmul( Inter_CA1, Inter.Vm ) >= thresh_Inter_CA1 ) * CaStimAmpl
     else:
         gabaInput.concInit = basalCa
         moose.vec( "/model/elec/Inter/soma" ).Vm = 0
@@ -565,8 +584,8 @@ def stimFunc( patternIdx, ChR2AmplScale ):
 
 def makeNetwork( rdes ):
     origNeuronId = rdes.elecid
-    CA3cells, CA3args = makeInputs( "CA3", 20e-6 )
-    interneurons, interneuronArgs = makeInputs( "Inter", 70e-6 )
+    CA3cells, CA3args = makeInputs( "CA3", 20e-6, numCA3 )
+    interneurons, interneuronArgs = makeInputs( "Inter", 70e-6, numCA1Inh )
 
 def innerMain( args ):
     patternIdx = args.pattern
