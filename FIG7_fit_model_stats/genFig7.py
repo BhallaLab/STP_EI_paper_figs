@@ -25,7 +25,6 @@ GABAStimStr = "8e-5"
 gluR_clamp_potl = "-0.07"
 GABAR_clamp_potl = "0.0"
 GABAR_clamp_offset = 0.1    # nA
-gluConductanceScale = 0.5   # Relative to default value in the spine proto
 gluTau2Scale = 4   # Relative to default value in the spine proto
 
 numCA3 = 256
@@ -66,8 +65,8 @@ SWEEP = 16
 patternDrivenCellActivity = {}
 
 ## Here are params for the ChR2 desensitization
-ChR2_tau = 0.4      # Tau for recovery
-ChR2_scale = 0.002  # Scaling for decrement
+ChR2_tau = 0.80      # Tau for recovery
+ChR2_scale = 0.0008  # Scaling for decrement
 ChR2_basal_desensitization = 0.01
 ChR2_sigma = 2.0  # Width of uniform deviate multiple for ChR2 stimulus generation
 ChR2_background = 0.05 # Width of uniform deviate for ChR2 stimulus generation
@@ -429,7 +428,7 @@ def makeInputs( name, xOffset, num ):
     return CA3cells.vec, ma 
 
 
-def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
+def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking, gluWt, gabaWt ):
     rGlu = pow( vGlu, 1.0/3.0)
     rGABA = pow( vGABA, 1.0/3.0)
     NaGbar = 400.0 if spiking else 6.0
@@ -495,9 +494,11 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
     )
     moose.seed( seed ) 
     gluReceptor = moose.element( '/library/spine/head/glu' )
-    gluReceptor.Gbar *= gluConductanceScale # Tweak conductance
+    gluReceptor.Gbar *= gluWt # Tweak conductance
     gluReceptor.tau2 *= gluTau2Scale # Tweak closing time
-    moose.element( '/library/GABA' ).Ek = -0.07 # Tweak Erev.
+    gabaReceptor = moose.element( '/library/GABA' )
+    gabaReceptor.Gbar *= gabaWt # Tweak conductance.
+    gabaReceptor.Ek = -0.07 # Tweak Erev.
     rdes.buildModel()
     if useGssa:
         #moose.showfield( "/model/chem/glu/ksolve" )
@@ -598,7 +599,7 @@ def innerMain( args ):
 
     generatePatterns( args )
 
-    rdes = buildModel( args.modelName, args.seed, not args.deterministic, args.volGlu, args.volGABA, args.spiking )
+    rdes = buildModel( args.modelName, args.seed, not args.deterministic, args.volGlu, args.volGABA, args.spiking, args.gluWt, args.gabaWt )
     pr = moose.PyRun( "/model/stims/stimRun" )
     #pr.initString = 'print(freq)'
     pr.runString = 'stimFunc({}, {})'.format( patternIdx, args.ChR2_ampl )
@@ -637,7 +638,7 @@ def innerMain( args ):
     return (plot0, patternIdx, args.repeatIdx, args.seed)
 
 def runSession( args ):
-    fname = "{}_{}_{}_{}_{}.h5".format( Path( args.outputFile ).stem, args.volGlu, args.pInter_CA1, args.pCA3_CA1, args.ChR2_ampl )
+    fname = "{}_{}_{}_{}_{}.h5".format( Path( args.outputFile ).stem, args.volGlu, args.gluWt, args.pCA3_CA1, args.ChR2_ampl )
     print( "Working on: ", fname, "\n\n\n" )
     pool = multiprocessing.Pool( processes = args.numProcesses )
     ret = []
@@ -678,7 +679,9 @@ def main():
     parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn77.g" )
     parser.add_argument( "-s", "--seed", type = int, help = "Optional: Seed to use for random numbers both for Python and for MOOSE.", default = 1234 )
     parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=1", default = 1.0 )
+    parser.add_argument( "-gluWt", "--gluWt", type = float, help = "Optional: Scaling for weight of Glu synapses. Default=1", default = 1.0 )
     parser.add_argument( "-vGABA", "--volGABA", type = float, help = "Optional: Volume scaling factor for GABA synapses. Default=0.5", default = 0.5 )
+    parser.add_argument( "-gabaWt", "--gabaWt", type = float, help = "Optional: Scaling for weight of GABA synapses. Default=1", default = 1.0 )
     parser.add_argument( "--pInter_CA1", type = float, help = "Optional: Probability of a given Interneuron connectiing to the CA1 cell. Default=0.004 ", default = 0.004 )
     parser.add_argument( "--pCA3_CA1", type = float, help = "Optional: Probability of a given CA3 cell connecting to the CA1 cell. Default=0.0002 ", default = 0.0002 )
     parser.add_argument( "--pCA3_Inter", type = float, help = "Optional: Probability of a given CA3 cell connecting to an interneuron. Default=0.0008 ", default = 0.0008 )
@@ -687,11 +690,12 @@ def main():
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
     for args.volGlu in [0.5, 0.8]:
-        for args.pInter_CA1 in [0.003, 0.005]:
-            for args.pCA3_CA1 in [ 0.004, 0.008]:
+        for args.pInter_CA1 in [0.005 ]:
+            for args.pCA3_CA1 in [ 0.004 ]:
                 for args.pCA3_Inter in [0.0015]:
-                    for args.ChR2_ampl in [1.5, 2.0, 2.5]:
-                        runSession( args )
+                    for args.gluWt in [0.8, 1.0, 1.5, 2.0]:
+                        for args.ChR2_ampl in [2.0, 2.4, 3.2, 4.0]:
+                            runSession( args )
 
     
 if __name__ == "__main__":
