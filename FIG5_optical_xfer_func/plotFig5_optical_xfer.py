@@ -400,11 +400,65 @@ def panelC():
     #plt.title(f'Projection {i+1}')
     plt.tight_layout()
 
+def fracOverThresh( distrib ):
+    ### Normalized cumulative distribution
+    sorted_data = np.sort(distrib)
+    #pcts = np.linspace( 0, sorted_data[-1], 100 )
+    pcts = np.linspace( 0, 100, 100 )
+    indices = np.searchsorted( sorted_data, pcts, side='right')
+    return ( len(distrib)-indices ) / len( distrib )
+
+def panelD():
+    distrib5 = np.zeros( 5 * numCA3 )
+    for idx, pattern in enumerate( [46, 47, 48, 49, 50] ):
+        distrib5[idx*numCA3: (idx+1)*numCA3] = patternDrivenCellActivity[pattern]
+    distrib15 = np.zeros( 3 * numCA3 )
+    for idx, pattern in enumerate( [52, 53, 55] ):
+        distrib15[idx*numCA3: (idx+1)*numCA3] = patternDrivenCellActivity[pattern]
+    cdf5 = fracOverThresh( distrib5 )
+    cdf15 = fracOverThresh( distrib15 )
+    # Now I expand them on the x axis to obtain intensity scaling.
+
+    fratio5 = []
+    fratio15 = []
+    for intensity in np.arange( 0, 100-0.01, 1):
+        i5 = cdf5[ int(round(intensity) ) ]
+        if i5 > 0:
+            fratio5.append( cdf5[ int(round(0.5*intensity) ) ] / i5 )
+        else:
+            fratio5.append( 0.0 )
+
+        i15 = cdf15[ int(round(intensity) ) ]
+        if i15 > 0:
+            fratio15.append( cdf15[ int(round(0.5*intensity) ) ] / i15 )
+        else:
+            fratio15.append( 0.0 )
+        #fratio15.append( cdf15[ int(round(0.5*intensity) ) ] /
+            #cdf15[ int(round(intensity) ) ] )
+
+
+
+
+    plt.figure()
+    plt.plot( np.linspace( 0, 100, 100), cdf5, "r" )
+    plt.plot( np.linspace( 0, 100, 100), cdf15, "b" )
+    plt.title( "cdf" )
+    plt.figure()
+    plt.plot( np.linspace( 0, 100, 100), fratio5, "r" )
+    plt.plot( np.linspace( 0, 100, 100), fratio15, "b" )
+    plt.title( "fratio" )
+    #plt.hist(distrib5, bins = 20 )
+    #plt.title( "distrib5" )
+    #plt.figure()
+    #plt.hist(distrib15, bins = 20 )
+    #plt.title( "distrib15" )
+
 
 def main():
     generatePatterns()
     panelB()
     panelC()
+    panelD()
     plt.show()
 
     
