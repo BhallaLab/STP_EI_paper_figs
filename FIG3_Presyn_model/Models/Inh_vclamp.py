@@ -9,7 +9,7 @@ diffusionLength = 1e-3 # ensure single chem compt
 
 def load( scaleParam = [], chemFile = None ):
     if chemFile == None:
-        chemFile = 'Models/BothPresyn77.g' #Use the default
+        chemFile = 'Models/BothPresyn79.g' #Use the default
 
     tau2 = TAU  # Replace tau with a cell-specific value obtained from Look up fitEphysToTau.py
     RM = '1.0'
