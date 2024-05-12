@@ -6,14 +6,12 @@ import math
 import rdesigneur as rd
 import multiprocessing
 from pathlib import Path
-from scipy.ndimage import zoom
-from scipy.ndimage import shift
 import argparse
 
 freq = 80.0 # Hz
 stimDuration = 0.002   # seconds
 numPulses = 16
-CaStimAmpl = 2e-2     # mM. This is 20 micromolar.
+stimAmpl = 5e-2     # mM
 basalCa = 0.08e-3   # mM
 GABAdelay = 5.0e-3  # seconds
 width = 0.002
@@ -25,9 +23,9 @@ GABAStimStr = "8e-5"
 gluR_clamp_potl = "-0.07"
 GABAR_clamp_potl = "0.0"
 GABAR_clamp_offset = 0.1    # nA
+gluConductanceScale = 0.5   # Relative to default value in the spine proto
 gluTau2Scale = 4   # Relative to default value in the spine proto
 
-numCA3 = 256
 numCA1Exc = 100
 numCA1Inh = 200
 pCA3_CA1 = 0.0002
@@ -39,10 +37,6 @@ pInter_CA1 = 0.004
 CA3_CA1 = 0.0002
 CA3_Inter = 0.0008
 Inter_CA1 = 0.004
-CA3_noise = 0.0
-Inter_noise = 0.0
-CA3_spk_thresh = 10
-#CA3_thresholded = np.zeros( numCA3 )
 
 interState = 0
 thresh_CA3_Inter = 0.9999   # Avoid doing exact float comparisons to cross thresh.
@@ -62,14 +56,12 @@ SAMPLE_TIME = 11
 NUM_SAMPLES = SAMPLE_FREQ * SAMPLE_TIME
 SAMPLE_START = 49
 SWEEP = 16
-patternDrivenCellActivity = {}
+patternDict2 = {}
 
 ## Here are params for the ChR2 desensitization
-ChR2_tau = 0.80      # Tau for recovery
-ChR2_scale = 0.0008  # Scaling for decrement
+ChR2_tau = 0.4      # Tau for recovery
+ChR2_scale = 0.004  # Scaling for decrement
 ChR2_basal_desensitization = 0.01
-ChR2_sigma = 2.0  # Width of uniform deviate multiple for ChR2 stimulus generation
-ChR2_background = 0.05 # Width of uniform deviate for ChR2 stimulus generation
 
 PulseTrain = np.array([4001,10684,11276,11603,13433,15914,16193,17131,19457,19827,20561,21153,21578,
     22460,24407,24665,25093,25667,26213,26726,27343,28046,28625,29322,29608,31223,31729,32400,32756,
@@ -123,84 +115,84 @@ def patternDict():
     patternOnes = [1]*64
 
     patternA =  [
-             0,0,0,0,0,0,0,0,
-             0,0,0,1,0,0,0,0,
-             0,0,0,0,0,1,0,0,
-             0,0,0,0,0,0,0,0,
-             0,0,1,0,0,0,1,0,
-             0,0,0,0,0,0,0,0,
-             0,0,0,0,0,0,1,0,
-             0,0,0,0,0,0,0,0,]
+             0,0,0,1,1,0,0,0,
+             0,0,1,0,0,1,0,0,
+             0,0,1,0,0,1,0,0,
+             0,1,0,0,0,0,1,0,
+             0,1,1,1,1,1,1,0,
+             1,1,0,0,0,0,1,1,
+             1,0,0,0,0,0,0,1,
+             1,0,0,0,0,0,0,1,]
 
     patternB =  [
-             0,0,0,0,0,0,0,0,
-             0,1,0,0,0,0,0,0,
-             0,0,0,0,0,0,0,0,
-             0,0,0,0,1,0,0,0,
-             0,0,0,0,0,0,0,0,
+             0,1,1,1,1,1,0,0,
+             0,1,0,0,0,1,0,0,
+             0,1,0,0,0,1,0,0,
+             0,1,1,1,1,0,0,0,
+             0,1,0,0,0,1,0,0,
              0,1,0,0,0,0,1,0,
-             0,0,0,1,0,0,0,0,
+             0,1,1,1,1,1,0,0,
              0,0,0,0,0,0,0,0,]
 
     patternC =  [
-             0,0,0,0,0,0,1,0,
-             0,0,0,0,0,0,0,0,
-             0,0,0,1,0,0,0,0,
+             0,1,1,1,1,1,1,0,
+             1,1,0,0,0,0,0,1,
              1,0,0,0,0,0,0,0,
-             0,0,0,0,0,0,0,0,
-             0,0,0,0,0,0,0,0,
-             0,0,0,0,0,0,0,1,
-             0,1,0,0,0,0,0,0,]
+             1,0,0,0,0,0,0,0,
+             1,0,0,0,0,0,0,0,
+             1,0,0,0,0,0,0,0,
+             1,1,0,0,0,0,0,1,
+             0,1,1,1,1,1,1,0,]
 
     patternD =  [
              0,0,0,0,0,0,0,0,
-             0,0,1,0,0,1,0,0,
-             0,0,0,0,0,0,0,0,
-             0,0,0,0,0,0,1,0,
-             0,1,0,0,0,0,0,0,
-             0,0,0,0,0,0,0,0,
-             0,0,0,0,0,0,0,0,
-             0,0,0,0,0,1,0,0,]
+             1,1,1,1,1,1,0,0,
+             1,0,0,0,0,0,1,0,
+             1,0,0,0,0,0,1,0,
+             1,0,0,0,0,0,1,0,
+             1,0,0,0,0,0,1,0,
+             1,0,0,0,0,0,1,0,
+             1,1,1,1,1,1,0,0,]
 
     patternE =  [
+             0,1,1,1,1,1,1,0,
+             0,1,1,0,0,0,0,0,
+             0,1,1,0,0,0,0,0,
+             0,1,1,1,0,0,0,0,
              0,1,0,0,0,0,0,0,
-             0,0,0,0,0,0,1,0,
-             0,0,1,0,0,0,0,0,
-             0,0,0,0,0,0,0,0,
-             1,0,0,0,0,0,0,0,
-             0,0,0,0,0,0,0,0,
-             0,0,0,0,1,0,0,0,
-             0,0,0,0,0,0,0,0,]
+             0,1,0,0,0,0,0,0,
+             0,1,0,0,0,0,0,0,
+             0,1,1,1,1,1,1,0,]
 
     patternF =  [ 
-             0,0,0,0,0,0,1,0,
-             0,1,0,1,0,0,0,0,
-             0,0,0,1,0,1,0,0,
-             1,0,0,0,1,0,0,0,
-             0,0,1,0,0,0,1,0,
-             0,1,0,0,0,0,1,0,
-             0,0,0,1,0,0,1,1,
-             0,1,0,0,0,0,0,0,]
+             0,0,0,0,0,0,0,0,
+             1,1,1,1,1,1,1,1,
+             1,1,1,1,1,1,1,1,
+             1,1,0,0,0,0,0,0,
+             1,1,1,1,1,1,1,0,
+             1,1,1,1,1,1,1,0,
+             1,1,0,0,0,0,0,0,
+             1,1,0,0,0,0,0,0,]
 
     patternG =  [
-             0,0,0,0,0,0,1,0,
-             0,1,1,0,0,1,0,0,
-             0,0,0,1,0,0,0,0,
-             1,0,0,0,1,0,1,0,
-             0,1,0,0,0,0,0,0,
-             0,1,0,0,0,0,1,0,
-             0,0,0,1,0,0,0,1,
-             0,1,0,0,0,1,0,0,]
+             0,0,1,1,1,1,1,0,
+             0,1,1,1,1,1,1,1,
+             0,1,1,0,0,0,0,0,
+             0,1,1,0,0,1,1,0,
+             0,1,1,0,0,0,1,1,
+             0,1,1,0,0,0,1,1,
+             0,1,1,1,1,1,1,1,
+             0,0,1,1,1,1,1,0,]
 
     patternH =  [
-             0,1,0,0,0,0,1,0,
-             0,0,1,0,0,1,1,0,
-             0,0,1,1,0,0,0,0,
-             1,0,0,0,0,0,1,0,
-             1,1,0,0,0,0,0,0,
-             0,0,0,0,0,0,0,0,
-             0,0,0,0,1,0,0,1,
-             0,1,0,0,0,1,0,0,]
+             1,1,0,0,0,1,1,0,
+             1,1,0,0,0,1,1,0,
+             1,1,0,0,0,1,1,0,
+             1,1,1,1,1,1,1,0,
+             1,1,1,1,1,1,1,0,
+             1,1,0,0,0,1,1,0,
+             1,1,0,0,0,1,1,0,
+             1,1,0,0,0,1,1,0,]
 
     patternI =  [
              0,1,1,1,1,1,1,0,
@@ -225,91 +217,6 @@ def patternDict():
             'H': np.array( patternH, dtype = float),
             'I': np.array( patternI, dtype = float)
             }
-
-
-def opticProjDict( patternDict2 ):
-    # First, we define a few template optical projections. These are
-    # the somatic responses to stimuli at the specified points in space
-    proj = [
-        [
-            0,0,0,0,1,0,0,0,
-            0,0,0,1,2,0,1,0,
-            0,0,0,2,0,0,0,0,
-            0,0,1,3,1,1,0,0,
-            0,0,0,9,1,1,0,0,
-            0,0,6,4,1,0,0,0,
-            0,0,2,2,1,0,0,0,
-            0,0,3,2,2,1,1,0,
-        ],
-        [
-            0,0,0,0,1,0,0,0,
-            0,0,0,1,1,1,0,0,
-            0,0,0,2,2,0,0,0,
-            0,0,1,3,2,0,0,0,
-            0,0,2,9,1,1,0,0,
-            0,0,2,5,3,2,0,0,
-            0,0,1,4,2,1,0,0,
-            0,0,1,2,2,2,0,0,
-        ],
-        [
-            0,0,0,1,0,1,1,0,
-            0,0,0,1,0,0,1,0,
-            0,0,0,2,1,2,0,0,
-            0,0,1,9,7,0,0,0,
-            0,0,2,3,4,1,0,0,
-            0,0,1,2,3,1,0,0,
-            0,0,1,1,2,1,0,0,
-            0,0,1,1,0,0,0,0,
-        ],
-        [
-            0,0,0,0,0,1,0,0,
-            0,0,2,0,1,0,1,0,
-            0,0,2,0,1,1,1,0,
-            0,0,1,3,1,1,0,0,
-            0,0,0,9,0,0,0,0,
-            0,0,0,2,6,0,0,0,
-            0,0,0,2,2,0,0,0,
-            0,0,0,1,4,1,1,0,
-        ]
-    ]
-    '''
-    # Double the number of templates by getting mirror images.
-    for pp in proj:
-        proj2.append( np.array( pp ).reshape(8,8) )
-        proj2.append( np.fliplr( proj2[-1] ) )
-    # Expand these 8x8 arrays into 16x16 ones.
-    '''
-
-    proj2 = []
-    # Zoom in each template neuron to 16x16, and add mirror image of each.
-    for pp in proj:
-        proj2.append( zoom( np.array( pp ).reshape(8,8), 2, order=1 ) )
-        proj2.append( np.fliplr( proj2[-1] ) )
-        #proj2.append( zoom( np.array( pp ).reshape(8,8), 2, order=1 ) )
-
-    # Provide offsets to move these templates around in a bigger 16x16 grid.
-    # We have above 8 templates. We need to shuffle these 32 times
-    # to get a total of 256 CA3 neurons.
-    proj3 = []
-    for pp in proj2:
-        for dx in [-7, -5, -3, -1, 1, 3, 5, 7]:
-            for dy in [ -3, -1, 1, 3]:
-                proj3.append( shift(pp, shift=[dx, dy], mode='constant', cval=0) )
-
-    # Add noise to each of the templates above to get the full list.
-    for idx, pp in enumerate( proj3):
-        pp = pp*np.random.uniform( size=(16,16) ) * ChR2_sigma + np.random.uniform( size=(16,16) ) * ChR2_background
-        #print( idx, np.mean( pp ) )
-
-    # multiply and sum each input pattern with the template for each neuron,
-    # aka a dot product, to get an input-output matrix
-    patternStim = {}
-    for pat, val in patternDict2.items():
-        patternStim[pat] = np.array([ np.sum( val * pp.flatten() ) for pp in proj3 ])
-
-    return patternStim
-
-    
 
 pandasColumnNames = [
                  'cellID',              'sex',         'ageAtInj',
@@ -353,43 +260,31 @@ def generatePatterns( args ):
     global CA3_CA1
     global CA3_Inter
     global Inter_CA1
-    global patternDrivenCellActivity
+    global patternDict2
     pd = patternDict()
 
     # Assumes all are random projections.
     np.random.seed( args.seed )
-    CA3_Inter = (np.random.rand( numCA1Inh, numCA3 ) < args.pCA3_Inter) * 1.0
-    CA3_CA1 = (np.random.rand( numCA1Exc, numCA3 ) < args.pCA3_CA1) * 1.0
-    Inter_CA1 = (np.random.rand( numCA1Inh, numCA1Inh ) < args.pInter_CA1) * 1.0
-    px = {}
-    for char in ["A", "B", "C", "D", "E", "F", "G", "H", "I"]:
-        orig = pd[char].reshape(8,8)
-        temp = np.zeros( (16,16), dtype = float )
-        temp[::2, ::2] = orig       # Python slicing is cool.
-        #print( char, sum( orig ), sum( temp ) )
-        px[char] = temp.flatten()
+    CA3_Inter = (np.random.rand( 256, 256 ) < args.pCA3_Inter) * 1.0
+    CA3_CA1 = (np.random.rand( numCA1Exc, 256 ) < args.pCA3_CA1) * 1.0
+    Inter_CA1 = (np.random.rand( numCA1Inh, 256 ) < args.pInter_CA1) * 1.0
+    px = []
+    for char in ["A", "B", "C", "D", "E"]:
+        temp = pd[char].reshape(8,8).repeat(2, axis = 0)
+        temp2 = np.array(temp)
+        #temp2[:,5:] = 0
+        px.append( np.append(temp2.reshape(-1), np.zeros(128) ) )
 
     patternDict2 = {
-        46:px["A"],
-        47:px["B"],
-        48:px["C"],
-        49:px["D"],
-        50:px["E"],
-        52:px["F"],
-        53:px["G"],
-        55:px["H"],
+        46:px[0],
+        47:px[1],
+        48:px[2],
+        49:px[3],
+        50:px[4],
+        52:pd["F"].reshape(8,8).repeat( 4, axis=0 ).reshape(-1),
+        53:pd["G"].reshape(8,8).repeat( 4, axis=0 ).reshape(-1),
+        55:pd["H"].reshape(8,8).repeat( 4, axis=0 ).reshape(-1)
     }
-
-    patternDrivenCellActivity = opticProjDict( patternDict2 )
-
-class History:
-    def __init__( self ):
-        self.CA3ActiveTime = -10.0
-        self.InterActiveTime = -10.0
-        self.CA3_thresholded = np.zeros( numCA3 )
-        self.Inter_thresholded = np.zeros( numCA1Inh )
-
-history = History()
 
 class MooArg:
     def __init__( self, title, field ):
@@ -403,13 +298,13 @@ class MooArg:
         self.relpath = "."
 
 
-def makeInputs( name, xOffset, num ):
+def makeInputs( name, xOffset ):
     spacing = 2e-6
     size = spacing / 1.5
     yOffset = 15e-6
     zOffset = 0.0
     CA3 = moose.Neutral( "/model/elec/" + name )
-    CA3cells = moose.Compartment( "/model/elec/{}/soma".format(name), num )
+    CA3cells = moose.Compartment( "/model/elec/{}/soma".format(name), 256 )
     for idx, compt in enumerate( CA3cells.vec ):
         ii = idx % 16
         jj = 16 - idx // 16
@@ -428,14 +323,13 @@ def makeInputs( name, xOffset, num ):
     return CA3cells.vec, ma 
 
 
-def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking, gluWt, gabaWt ):
+def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
     rGlu = pow( vGlu, 1.0/3.0)
     rGABA = pow( vGABA, 1.0/3.0)
     NaGbar = 400.0 if spiking else 6.0
     KGbar = 450.0 if spiking else 3.5
 
     rdes = rd.rdesigneur(
-        verbose = False,
         elecDt = elecDt,
         chemDt = chemDt,
         funcDt = 0.0005,
@@ -494,11 +388,9 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking, gluWt, gab
     )
     moose.seed( seed ) 
     gluReceptor = moose.element( '/library/spine/head/glu' )
-    gluReceptor.Gbar *= gluWt # Tweak conductance
+    gluReceptor.Gbar *= gluConductanceScale # Tweak conductance
     gluReceptor.tau2 *= gluTau2Scale # Tweak closing time
-    gabaReceptor = moose.element( '/library/GABA' )
-    gabaReceptor.Gbar *= gabaWt # Tweak conductance.
-    gabaReceptor.Ek = -0.07 # Tweak Erev.
+    moose.element( '/library/GABA' ).Ek = -0.07 # Tweak Erev.
     rdes.buildModel()
     if useGssa:
         #moose.showfield( "/model/chem/glu/ksolve" )
@@ -514,15 +406,11 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking, gluWt, gab
 
 
 def stimFunc( patternIdx, ChR2AmplScale ):
-    global history
-    #global CA3_thresholded
     t = moose.element( '/clock' ).currentTime
     # Need to look up if this is time to generate pulse. 
     idx = int(round( t/chemDt ) )
-    '''
     if idx % int( 1.0/chemDt )  == 0:   # dot every second.
         print( ".", flush = True, end = "" )
-    '''
     if idx >= len( ReducedPulseIdx ):
         return
     CA3isActive = (ReducedPulseIdx[idx] > 0.5) #Stimulus is to be delivered
@@ -534,50 +422,45 @@ def stimFunc( patternIdx, ChR2AmplScale ):
     InterIsActive = ( ReducedPulseIdx[idx2] > 0.5 )
     gluInput = moose.vec( "/model/chem/glu/Ca_ext" )
     gabaInput = moose.vec( "/model/chem/GABA/Ca_ext" )
-    if t == chemDt:
-        print( "{}: AmplScale = {:5.2f}  ".format( patternIdx, ChR2AmplScale ) )
     if CA3isActive:
-        history.CA3ActiveTime = t
         #print( "Trig CA3 at {:.3f} {} with {}".format( t, idx, patternIdx ))
-        # Here I look up the activity of all cells, scale by chr2Ampl for
-        # desensitization, add some noise to each cell, and decide if the
-        # result of all this is over threshold for each cell.
-        pdca = patternDrivenCellActivity[patternIdx]
-        history.CA3_thresholded = (
-            (pdca*chr2Ampl +
-            np.random.normal( size=len(pdca), loc=0, scale=CA3_noise)
-            ) > CA3_spk_thresh ) * 1
-        #print( "crampl={:.3f}, sumglu={:.3f}, #ca3cells={:.2f}, pdca={:.2f}".format( chr2Ampl, sum( gluInput.concInit ), np.sum( CA3_thresholded ), max( pdca ) ) )
-        if idx in [4, 1068, 2056, 3122, 4049, 4050]: # stimtrig values.
-            print( "{:7.2f}, {:<3d}".format( chr2Ampl, int(np.sum(history.CA3_thresholded)) ), end = "", flush = True )
-
-        if idx == 4050:    # end it.
-            print( "  std={:.2f}  #zero={:d}".format(np.std(history.CA3_thresholded), np.sum(history.CA3_thresholded < 0.5) ) )
-
-    if (t - history.CA3ActiveTime) < (stimDuration - 1e-6):
-        #print( "CA1Stim", t )
+        inputPattern = patternDict2[patternIdx]
         ca3cells = moose.vec( "/model/elec/CA3/soma" )
-        ca3cells.Vm = history.CA3_thresholded 
-        gluInput.concInit = (np.matmul( CA3_CA1, history.CA3_thresholded ) >= thresh_CA3_CA1 ) * CaStimAmpl
+        #sensThresh = fracDesensitize * (2.0 - t) * sum(inputPattern)/len(inputPattern)
+        #sensitization = np.zeros( len( ca3cells ) )
+        #sensitization[ np.random.rand( len( ca3cells ) ) < sensThresh ]=1.0
+        #ca3cells.Vm = patternDict2[patternIdx] + sensitization
+        pd = patternDict2[patternIdx]
+        #ca3cells.Vm = np.where( np.random.rand(len(pd)) < chr2Ampl, pd, 0 )
+        #ca3cells.Vm = np.where( np.random.rand(len(pd)) < chr2Ampl, pd, 0 )
+        amplIdx = min( len( pd ), int( chr2Ampl * len( pd ) ) )
+        ca3cells.Vm = np.append( pd[:amplIdx], np.zeros( len(pd)-amplIdx ) )
+        #ca3cells.Vm = patternDict2[patternIdx]*chr2Ampl
+        gluInput.concInit = (np.matmul( CA3_CA1, ca3cells.Vm ) >= thresh_CA3_CA1 ) * stimAmpl
+        #print( "SENSE = ", t, len( sensitization), sum( sensitization ), sum( ca3cells.Vm ), sum(gluInput.concInit ) )
+        '''
+        print( "MEAN CA3_Inter = ", np.mean( np.matmul( CA3_Inter, ca3cells.Vm ) ),
+            " CA3_CA1 = ", np.mean( np.matmul( CA3_CA1, ca3cells.Vm ) ),
+            " Inter_CA1 = ", np.mean( np.matmul( Inter_CA1, Inter.Vm ) ),
+            )
+        '''
+        if patternIdx == 46:
+            print( "{}  t={:.3f}  NUMGlu={:.1f}    chr2Ampl={:.3f}".format( patternIdx, t, sum( gluInput.concInit ) / stimAmpl, chr2Ampl ), flush=True )
     else:
         moose.vec( "/model/elec/CA3/soma" ).Vm = 0.0
         gluInput.concInit = basalCa
 
     if InterIsActive:
-        history.InterActiveTime = t
-        history.Inter_thresholded = (
-            (
-                np.matmul( CA3_Inter, history.CA3_thresholded) + 
-                np.random.normal(
-                    size=len(history.Inter_thresholded), loc=0, scale=Inter_noise)
-            ) >= thresh_CA3_Inter ) * 1.0
+        pd = patternDict2[patternIdx]
+        amplIdx = min( len( pd ), int( chr2Ampl * len( pd ) ) )
+        #pd = np.where( np.random.rand( len( pd ) ) < chr2Ampl, pd, 0 )
+        pd =  np.append( pd[:amplIdx], np.zeros( len(pd)-amplIdx ) )
 
-    if (t - history.InterActiveTime) < (stimDuration - 1e-6):
-        #print( "InterStim", t )
         Inter = moose.vec( "/model/elec/Inter/soma" )
-        Inter.Vm = history.Inter_thresholded
-        #print( "LENS = ", len( gabaInput.concInit ), len( Inter_CA1 ), len( Inter.Vm ), len( history.Inter_thresholded ) )
-        gabaInput.concInit = (np.matmul( Inter_CA1, Inter.Vm ) >= thresh_Inter_CA1 ) * CaStimAmpl
+        Inter.Vm = (np.matmul( CA3_Inter, pd) >= thresh_CA3_Inter ) * 1.0
+        gabaInput.concInit = (np.matmul( Inter_CA1, Inter.Vm ) >= thresh_Inter_CA1 ) * stimAmpl
+        if patternIdx == 46:
+            print( "{}  NUMGABA={:.1f}    chr2Ampl={:.3f}".format( patternIdx, sum( gabaInput.concInit) / stimAmpl, chr2Ampl ), flush=True )
     else:
         gabaInput.concInit = basalCa
         moose.vec( "/model/elec/Inter/soma" ).Vm = 0
@@ -585,8 +468,8 @@ def stimFunc( patternIdx, ChR2AmplScale ):
 
 def makeNetwork( rdes ):
     origNeuronId = rdes.elecid
-    CA3cells, CA3args = makeInputs( "CA3", 20e-6, numCA3 )
-    interneurons, interneuronArgs = makeInputs( "Inter", 70e-6, numCA1Inh )
+    CA3cells, CA3args = makeInputs( "CA3", 20e-6 )
+    interneurons, interneuronArgs = makeInputs( "Inter", 70e-6 )
 
 def innerMain( args ):
     patternIdx = args.pattern
@@ -599,7 +482,7 @@ def innerMain( args ):
 
     generatePatterns( args )
 
-    rdes = buildModel( args.modelName, args.seed, not args.deterministic, args.volGlu, args.volGABA, args.spiking, args.gluWt, args.gabaWt )
+    rdes = buildModel( args.modelName, args.seed, not args.deterministic, args.volGlu, args.volGABA, args.spiking )
     pr = moose.PyRun( "/model/stims/stimRun" )
     #pr.initString = 'print(freq)'
     pr.runString = 'stimFunc({}, {})'.format( patternIdx, args.ChR2_ampl )
@@ -638,19 +521,19 @@ def innerMain( args ):
     return (plot0, patternIdx, args.repeatIdx, args.seed)
 
 def runSession( args ):
-    fname = "{}_{}_{}_{}_{}.h5".format( Path( args.outputFile ).stem, args.volGlu, args.gluWt, args.pCA3_CA1, args.ChR2_ampl )
-    print( "Working on: ", fname, "\n\n\n" )
+    fname = "{}_{}_{}_{}_{}.h5".format( Path( args.outputFile ).stem, args.volGlu, args.pCA3_CA1, args.pCA3_Inter, args.ChR2_ampl )
+    print( "Working on: ", fname )
     pool = multiprocessing.Pool( processes = args.numProcesses )
     ret = []
     data = []
     argdict = vars( args )
     for pattern in [46,47,48,49,50,52,53,55]:
-    #for pattern in [46,55]:
+    #for pattern in [52]:
         argdict["pattern"] = pattern
         for ii in range( args.numRepeats ):
             argdict["repeatIdx"] = ii
             argdict["seed"] = args.seed + pattern * args.numRepeats + ii
-            #print( "Launching {}.{}".format( pattern, ii ) )
+            print( "Launching {}.{}".format( pattern, ii ) )
             innerArgs = argparse.Namespace( **argdict )
             ret.append( pool.apply_async( innerMain, args = (innerArgs, )))
     for rr in ret:
@@ -676,26 +559,23 @@ def main():
     parser.add_argument( '-spk', '--spiking', action="store_true", help ='Flag: when set, use high Na/K channel densities in soma to get spiking.' )
     parser.add_argument( '-v', '--voltage_clamp', action="store_true", help ='Flag: when set, do voltage clamp for glu and GABA currents respectively.')
     parser.add_argument( '-d', '--deterministic', action="store_true", help ='Flag: when set, use deterministic ODE solver. Normally uses GSSA stochastic solver.')
-    parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn77.g" )
+    parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn80.g" )
     parser.add_argument( "-s", "--seed", type = int, help = "Optional: Seed to use for random numbers both for Python and for MOOSE.", default = 1234 )
     parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=1", default = 1.0 )
-    parser.add_argument( "-gluWt", "--gluWt", type = float, help = "Optional: Scaling for weight of Glu synapses. Default=1", default = 1.0 )
     parser.add_argument( "-vGABA", "--volGABA", type = float, help = "Optional: Volume scaling factor for GABA synapses. Default=0.5", default = 0.5 )
-    parser.add_argument( "-gabaWt", "--gabaWt", type = float, help = "Optional: Scaling for weight of GABA synapses. Default=1", default = 1.0 )
-    parser.add_argument( "--pInter_CA1", type = float, help = "Optional: Probability of a given Interneuron connectiing to the CA1 cell. Default=0.004 ", default = 0.004 )
+    parser.add_argument( "--pInter_CA1", type = float, help = "Optional: Probability of a given Interneuron connecting to the CA1 cell. Default=0.004 ", default = 0.004 )
     parser.add_argument( "--pCA3_CA1", type = float, help = "Optional: Probability of a given CA3 cell connecting to the CA1 cell. Default=0.0002 ", default = 0.0002 )
     parser.add_argument( "--pCA3_Inter", type = float, help = "Optional: Probability of a given CA3 cell connecting to an interneuron. Default=0.0008 ", default = 0.0008 )
     parser.add_argument( "--ChR2_ampl", type = float, help = "Optional: Scale factor for ChR2 stimulus amplitude.", default = 1.0 )
 
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
-    for args.volGlu in [0.5, 0.8]:
-        for args.pInter_CA1 in [0.005 ]:
-            for args.pCA3_CA1 in [ 0.004 ]:
-                for args.pCA3_Inter in [0.0015]:
-                    for args.gluWt in [0.8, 1.0, 1.5, 2.0]:
-                        for args.ChR2_ampl in [2.0, 2.4, 3.2, 4.0]:
-                            runSession( args )
+    for args.volGlu in [0.5, 1.0]:
+        for args.pInter_CA1 in [0.02]:
+            for args.pCA3_CA1 in [0.01, 0.02, 0.06 ]:
+                for args.pCA3_Inter in [0.005, 0.01]:
+                    for args.ChR2_ampl in [0.5, 1.0]:
+                        runSession( args )
 
     
 if __name__ == "__main__":
