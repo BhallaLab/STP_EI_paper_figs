@@ -14,7 +14,7 @@ numPulses = 16
 stimAmpl = 5e-2     # mM
 basalCa = 0.08e-3   # mM
 GABAdelay = 5.0e-3  # seconds
-width = 0.002
+stimWidth = 0.002
 firstPlotEntry = ['soma', '1', '.', 'Vm', 'Membrane potential']
 numSq = 15
 
@@ -328,6 +328,7 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
     rGABA = pow( vGABA, 1.0/3.0)
     NaGbar = 400.0 if spiking else 6.0
     KGbar = 450.0 if spiking else 3.5
+    useGssa = True
 
     rdes = rd.rdesigneur(
         elecDt = elecDt,
@@ -408,18 +409,22 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
 def stimFunc( patternIdx, ChR2AmplScale ):
     t = moose.element( '/clock' ).currentTime
     # Need to look up if this is time to generate pulse. 
+    stimWidthIdx = int( round( stimWidth / chemDt ) )
     idx = int(round( t/chemDt ) )
     if idx % int( 1.0/chemDt )  == 0:   # dot every second.
         print( ".", flush = True, end = "" )
     if idx >= len( ReducedPulseIdx ):
         return
-    CA3isActive = (ReducedPulseIdx[idx] > 0.5) #Stimulus is to be delivered
+    # Stim is to be delivered for the entire duration of stimWidth.
+    CA3isActive = ( sum( ReducedPulseIdx[idx-stimWidthIdx:idx] ) > 0.5 )
+    #CA3isActive = (ReducedPulseIdx[idx] > 0.5) #Stimulus is to be delivered
     assert( len( FracChR2active ) == len( ReducedPulseIdx ) )
     chr2Ampl = FracChR2active[idx] * ChR2AmplScale
     idx2 = int( round( (t - GABAdelay) / chemDt ) )
     if idx2 >= len( ReducedPulseIdx ):
         return
-    InterIsActive = ( ReducedPulseIdx[idx2] > 0.5 )
+    InterIsActive = ( sum( ReducedPulseIdx[idx2-stimWidthIdx:idx2] ) > 0.5 )
+    #InterIsActive = ( ReducedPulseIdx[idx2] > 0.5 )
     gluInput = moose.vec( "/model/chem/glu/Ca_ext" )
     gabaInput = moose.vec( "/model/chem/GABA/Ca_ext" )
     if CA3isActive:
@@ -445,7 +450,7 @@ def stimFunc( patternIdx, ChR2AmplScale ):
             )
         '''
         if patternIdx == 46:
-            print( "{}  t={:.3f}  NUMGlu={:.1f}    chr2Ampl={:.3f}".format( patternIdx, t, sum( gluInput.concInit ) / stimAmpl, chr2Ampl ), flush=True )
+            print( "{}  t={:.5f}  NUMGlu={:.1f}    chr2Ampl={:.3f}".format( patternIdx, t, sum( gluInput.concInit ) / stimAmpl, chr2Ampl ), flush=True )
     else:
         moose.vec( "/model/elec/CA3/soma" ).Vm = 0.0
         gluInput.concInit = basalCa
@@ -559,7 +564,7 @@ def main():
     parser.add_argument( '-spk', '--spiking', action="store_true", help ='Flag: when set, use high Na/K channel densities in soma to get spiking.' )
     parser.add_argument( '-v', '--voltage_clamp', action="store_true", help ='Flag: when set, do voltage clamp for glu and GABA currents respectively.')
     parser.add_argument( '-d', '--deterministic', action="store_true", help ='Flag: when set, use deterministic ODE solver. Normally uses GSSA stochastic solver.')
-    parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn80.g" )
+    parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn82.g" )
     parser.add_argument( "-s", "--seed", type = int, help = "Optional: Seed to use for random numbers both for Python and for MOOSE.", default = 1234 )
     parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=1", default = 1.0 )
     parser.add_argument( "-vGABA", "--volGABA", type = float, help = "Optional: Volume scaling factor for GABA synapses. Default=0.5", default = 0.5 )
