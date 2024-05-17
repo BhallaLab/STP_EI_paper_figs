@@ -23,7 +23,7 @@ GABAStimStr = "8e-5"
 gluR_clamp_potl = "-0.07"
 GABAR_clamp_potl = "0.0"
 GABAR_clamp_offset = 0.1    # nA
-gluConductanceScale = 0.5   # Relative to default value in the spine proto
+gluConductanceScale = 1.0   # Relative to default value in the spine proto
 gluTau2Scale = 4   # Relative to default value in the spine proto
 
 numCA1Exc = 100
@@ -270,10 +270,13 @@ def generatePatterns( args ):
     Inter_CA1 = (np.random.rand( numCA1Inh, 256 ) < args.pInter_CA1) * 1.0
     px = []
     for char in ["A", "B", "C", "D", "E"]:
-        temp = pd[char].reshape(8,8).repeat(2, axis = 0)
-        temp2 = np.array(temp)
-        #temp2[:,5:] = 0
-        px.append( np.append(temp2.reshape(-1), np.zeros(128) ) )
+        #temp = pd[char].reshape(8,8).repeat(2, axis = 0)
+        temp = np.array(pd[char]).reshape(8,8).repeat(4, axis=0).reshape(-1)
+        # Now put in a mask that zeros 3/4 of the values
+        zero_indices = np.random.choice(256, 192, replace=False)
+        temp[zero_indices] = 0
+        px.append( temp )
+        #px.append( np.append(temp2.reshape(-1), np.zeros(128) ) )
 
     patternDict2 = {
         46:px[0],
