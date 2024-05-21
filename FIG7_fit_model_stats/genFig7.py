@@ -23,7 +23,7 @@ GABAStimStr = "8e-5"
 gluR_clamp_potl = "-0.07"
 GABAR_clamp_potl = "0.0"
 GABAR_clamp_offset = 0.1    # nA
-gluConductanceScale = 2.0   # Relative to default value in the spine proto
+gluConductanceScale = 1.0   # Relative to default value in the spine proto
 gluTau2Scale = 4   # Relative to default value in the spine proto
 
 numCA1Exc = 100
@@ -578,11 +578,11 @@ def main():
 
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
-    for args.volGlu in [0.5, 1.0, 2.0]:
+    for args.volGlu in [1.0, 2.0, 4.0]:
         for args.pInter_CA1 in [0.02]:
-            for args.pCA3_CA1 in [0.01, 0.02 ]:
+            for args.pCA3_CA1 in [0.02, 0.05 ]:
                 for args.pCA3_Inter in [0.002, 0.005]:
-                    for args.ChR2_ampl in [0.5, 1.0]:
+                    for args.ChR2_ampl in [1.0]:
                         runSession( args )
 
     
