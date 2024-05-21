@@ -23,7 +23,7 @@ GABAStimStr = "8e-5"
 gluR_clamp_potl = "-0.07"
 GABAR_clamp_potl = "0.0"
 GABAR_clamp_offset = 0.1    # nA
-gluConductanceScale = 1.0   # Relative to default value in the spine proto
+gluConductanceScale = 2.0   # Relative to default value in the spine proto
 gluTau2Scale = 4   # Relative to default value in the spine proto
 
 numCA1Exc = 100
@@ -59,8 +59,8 @@ SWEEP = 16
 patternDict2 = {}
 
 ## Here are params for the ChR2 desensitization
-ChR2_tau = 0.4      # Tau for recovery
-ChR2_scale = 0.004  # Scaling for decrement
+ChR2_tau = 1.5      # Tau for recovery
+ChR2_scale = 0.001  # Scaling for decrement
 ChR2_basal_desensitization = 0.01
 
 PulseTrain = np.array([4001,10684,11276,11603,13433,15914,16193,17131,19457,19827,20561,21153,21578,
@@ -578,10 +578,10 @@ def main():
 
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
-    for args.volGlu in [0.5, 1.0]:
+    for args.volGlu in [0.5, 1.0, 2.0]:
         for args.pInter_CA1 in [0.02]:
-            for args.pCA3_CA1 in [0.01, 0.02, 0.06 ]:
-                for args.pCA3_Inter in [0.005, 0.01]:
+            for args.pCA3_CA1 in [0.01, 0.02 ]:
+                for args.pCA3_Inter in [0.002, 0.005]:
                     for args.ChR2_ampl in [0.5, 1.0]:
                         runSession( args )
 
