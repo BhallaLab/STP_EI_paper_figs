@@ -11,8 +11,9 @@ import matplotlib.pyplot as plt
 # link above and below
 def doPlot( dataset, idx, panel, freq, doProb = False ):
     cell = dataset.split("_")[0]
-    exc = "Exc" if dataset.split("_")[1] == 1 else "Inh"
-    if not os.path.isfile("Expts/fs_{0}_{1}_pk.json".format(dataset,freq)):
+    exc = "Exc" if dataset.split("_")[1] == "1" else "Inh"
+    if not os.path.isfile("ExptFilesForFigure/fs_{0}_{1}_{1}_pk.json".format(dataset,freq)):
+        print("Not found: ExptFilesForFigure/fs_{0}_{1}_{1}_pk.json".format(dataset,freq))
         return
     ax = plt.subplot( 3, 2, idx )
     ax.text( -0.10, 1.05, panel, fontsize = 22, weight = "bold", 
@@ -21,9 +22,9 @@ def doPlot( dataset, idx, panel, freq, doProb = False ):
         score, elapsedTime, diagnostics = findSim.innerMain( 
             #"ExptFilesForFigure/fs_7492_1_5_49_{}_pk.json".format( freq ), 
             #modelFile = "ResultsForFigure/opt7492_1_5_49.g", 
-            "Expts/fs_{}_prob.json".format( dataset ),
+            "ExptFilesForFigure/fs_{}_{}_prob.json".format( dataset, freq ),
             modelFile = "Models/{}_vclamp{}.py".format( exc, cell ), 
-            chemFile = "Results/opt{}.g".format( dataset ), 
+            chemFile = "Models/BothPresyn77.g",
             mapFile = "Maps/mapPresyn{}.json".format( exc ),
             bigFont = True, labelPos = "upper left", deferPlot = True )
         ex = np.array( diagnostics["exptX"] )
@@ -37,9 +38,9 @@ def doPlot( dataset, idx, panel, freq, doProb = False ):
         score, elapsedTime, diagnostics = findSim.innerMain( 
             #"ExptFilesForFigure/fs_7492_1_5_49_{}_pk.json".format( freq ), 
             #modelFile = "ResultsForFigure/opt7492_1_5_49.g", 
-            "Expts/fs_{0}_{1}_pk.json".format( dataset, freq), 
+            "ExptFilesForFigure/fs_{0}_{1}_{1}_pk.json".format( dataset, freq), 
             modelFile = "Models/{}_vclamp{}.py".format( exc, cell ), 
-            chemFile = "Results/opt{}.g".format( dataset ), 
+            chemFile = "Models/BothPresyn77.g", 
             mapFile = "Maps/mapPresyn{}.json".format( exc ),
             bigFont = True, labelPos = "upper left", deferPlot = True )
         ex = np.array( diagnostics["exptX"] )
@@ -95,9 +96,11 @@ def main():
     #for cell in ["7492", "7491", "1621"]:
     #for cell in ["1931", "1524", "1522", "1621", "111", "7491"]:
     for cell in ["7492", "1491", "6301", "6201", "1541", "1531"]:
+    #for cell in ["1621"]:
         #for exc in ["0", "1"]:
-        for exc in ["0",]:
-            for pat in [ "5_46", "5_47", "5_48", "5_49", "5_50", "15_52", "15_53", "15_55"]: 
+        for exc in ["1",]:
+            #for pat in [ "5_46", "5_47", "5_48", "5_49", "5_50", "15_52", "15_53", "15_55"]: 
+            for pat in [ "5"]: 
 
                 dataset = "{}_{}_{}".format( cell, exc, pat )
                 fig = plt.figure( figsize = (10, 12), facecolor = "white" )

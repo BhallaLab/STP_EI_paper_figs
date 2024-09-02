@@ -11,3 +11,4 @@ opt*.g
 *.odg
 *.h5
 *.swp
+VCL*

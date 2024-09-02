@@ -1,0 +1,9 @@
+*.png
+*.pdf
+*.tgz
+*.odg
+*.h5
+*.swp
+*.txt
+genConnStats*.py
+SIMDATA*

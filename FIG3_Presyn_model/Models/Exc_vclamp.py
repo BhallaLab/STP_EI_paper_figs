@@ -39,7 +39,7 @@ def load( scaleParam = [], chemFile = None ):
             ['make_GABA()', 'GABAR'],
         ],
         chanDistrib = [
-            ['gluR', 'dend#', 'Gbar', '2'],
+            ['gluR', 'dend#', 'Gbar', '50'],
             ['GABAR', 'dend#', 'Gbar', '0.00000000001'],
         ],
         chemProto = [[chemFile, 'chem']],

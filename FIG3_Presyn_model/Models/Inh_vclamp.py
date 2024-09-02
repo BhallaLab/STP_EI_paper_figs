@@ -40,7 +40,7 @@ def load( scaleParam = [], chemFile = None ):
         ],
         chanDistrib = [
             ['gluR', 'dend#', 'Gbar', '0.00000000001'],
-            ['GABAR', 'dend#', 'Gbar', '2'],
+            ['GABAR', 'dend#', 'Gbar', '50'],
         ],
         chemProto = [[chemFile, 'chem']],
         chemDistrib = [

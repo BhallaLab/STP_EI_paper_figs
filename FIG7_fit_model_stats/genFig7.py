@@ -23,7 +23,7 @@ GABAStimStr = "8e-5"
 gluR_clamp_potl = "-0.07"
 GABAR_clamp_potl = "0.0"
 GABAR_clamp_offset = 0.1    # nA
-gluConductanceScale = 1   # Relative to default value in the spine proto
+gluConductanceScale = 2   # Relative to default value in the spine proto
 gluTau2Scale = 4   # Relative to default value in the spine proto
 
 numCA1Exc = 100
@@ -59,9 +59,15 @@ SWEEP = 16
 patternDict2 = {}
 
 ## Here are params for the ChR2 desensitization
-ChR2_tau = 2.5      # Tau for recovery
-ChR2_scale = 0.0004  # Scaling for decrement
+tauCell = 0.050             # 80 ms to charge cell through gLeak
+tauChR2chan = 0.006         # 6 ms to charge cell when ChR2 chan is open.
+tauChR2recovery = 2.5       # Tau for desensitization recovery
+ChR2decrement = 0.0003  # Scaling for decrement
 ChR2_basal_desensitization = 0.01
+Erest = 0
+EChR2 = 30
+## Here are the params for the charging/firing of CA3 cells due to ChR2
+charge_max = 20.0    
 
 PulseTrain = np.array([4001,10684,11276,11603,13433,15914,16193,17131,19457,19827,20561,21153,21578,
     22460,24407,24665,25093,25667,26213,26726,27343,28046,28625,29322,29608,31223,31729,32400,32756,
@@ -88,25 +94,24 @@ ReducedPulseIdx = np.zeros( round(SAMPLE_TIME / chemDt ), dtype=int )
 for pp in PulseTrain:
     ReducedPulseIdx[round(pp / 10)] = 1
 
-
-
 def desensitization( events, dt ):
-    ampl = np.ones( len( events ) )
-    lastrr = 0
+    ret = []
     lastStim = -10.0    # Long time since last event.
-    lastAmpl = 1.0
     dy = ChR2_basal_desensitization
+    Vm = Erest
+    G = 1.0
     for idx, rr in enumerate( events ):
         t = idx * dt
-        lastt = t - dt
         if rr:
-            interval = t - lastStim
-            dy = ChR2_basal_desensitization + ChR2_scale/interval
+            dy =  ChR2_basal_desensitization + ChR2decrement/(t-lastStim)
+            #G -= dt * G*( 1-np.exp(-dy) )
+            G -= G*( 1-np.exp(-dy) )
+            Vm += dt * ( EChR2-Vm ) * G / tauChR2chan
             lastStim = t
-        lastrr = rr
-        ampl[idx] = lastAmpl + ( 1 - lastAmpl )*dt/ChR2_tau - lastrr*lastAmpl*(1-np.exp( -dy ) )
-        lastAmpl = ampl[idx]
-    return ampl
+        G += dt * ( 1-G )/tauChR2recovery
+        Vm += dt * (Erest-Vm)/tauCell
+        ret.append( Vm )
+    return np.array( ret )
         
 FracChR2active = desensitization( ReducedPulseIdx, chemDt )
 
@@ -240,8 +245,9 @@ pandasColumnNames = [
 
 colIdx = { nn:idx for idx, nn in enumerate( pandasColumnNames )}
 
-def makeRow( pattern, repeat, data, args ):
-    row = [0]*SAMPLE_START + list( data[:NUM_SAMPLES] ) + [0.0]*NUM_SAMPLES + list(TRIG) + [0.0]*NUM_SAMPLES
+def makeRow( pattern, repeat, data, edata, idata, args ):
+    #row = [0]*SAMPLE_START + list( data[:NUM_SAMPLES] ) + [0.0]*NUM_SAMPLES + list(TRIG) + [0.0]*NUM_SAMPLES
+    row = [0]*SAMPLE_START + list( data[:NUM_SAMPLES] ) + list( edata[:NUM_SAMPLES] ) + list(TRIG) + list( idata[:NUM_SAMPLES] )
     row[colIdx['exptSeq']] = repeat
     row[colIdx["patternList"]] = pattern
     row[colIdx["numSq"]] = 5 if pattern < 51 else 15
@@ -326,12 +332,13 @@ def makeInputs( name, xOffset ):
     return CA3cells.vec, ma 
 
 
-def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
-    rGlu = pow( vGlu, 1.0/3.0)
-    rGABA = pow( vGABA, 1.0/3.0)
-    NaGbar = 400.0 if spiking else 6.0
-    KGbar = 450.0 if spiking else 3.5
-    useGssa = True
+#def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
+def buildModel( args ):
+    rGlu = pow( args.volGlu, 1.0/3.0)
+    rGABA = pow( args.volGABA, 1.0/3.0)
+    NaGbar = 400.0 if args.spiking else 6.0
+    KGbar = 450.0 if args.spiking else 3.5
+    useGssa = not args.deterministic
 
     rdes = rd.rdesigneur(
         elecDt = elecDt,
@@ -350,7 +357,7 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
             ['spine', 'dend#', '2e-6', '-1e-6', '1', '0.5']  
             ],
         chemProto = [
-            ['Models/{}'.format( presynModelName ), 'chem'],
+            ['Models/{}'.format( args.modelName ), 'chem'],
         ],
         chanProto = [
             ['make_Na()', 'Na'],
@@ -369,7 +376,7 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
         chanDistrib = [
             ['Na', 'soma', 'Gbar', str(NaGbar) ],
             ['K', 'soma', 'Gbar', str(KGbar) ],
-            ['GABA', 'dend#', 'Gbar', '3.2' ]
+            ['GABA', 'dend#', 'Gbar', str( args.wtGABA ) ]
         ],
         adaptorList = [
             [ 'glu/glu', 'n', 'glu', 'activation', 0.0, 1500 ],
@@ -390,9 +397,9 @@ def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
             ['dend#', '1', 'GABA/GABA', 'n', 'GABA_released'],
         ]
     )
-    moose.seed( seed ) 
+    moose.seed( args.seed ) 
     gluReceptor = moose.element( '/library/spine/head/glu' )
-    gluReceptor.Gbar *= gluConductanceScale/vGlu # Tweak conductance
+    gluReceptor.Gbar *= args.wtGlu # Tweak conductance
     #print ( "GLUGGGGG = ", vGlu, gluConductanceScale )
     gluReceptor.tau2 *= gluTau2Scale # Tweak closing time
     moose.element( '/library/GABA' ).Ek = -0.07 # Tweak Erev.
@@ -420,10 +427,13 @@ def stimFunc( patternIdx, ChR2AmplScale ):
     if idx >= len( ReducedPulseIdx ):
         return
     # Stim is to be delivered for the entire duration of stimWidth.
-    CA3isActive = ( sum( ReducedPulseIdx[idx-stimWidthIdx:idx] ) > 0.5 )
+    CA3isActive = ( sum( ReducedPulseIdx[idx-stimWidthIdx:idx] ) > 0.1 )
     #CA3isActive = (ReducedPulseIdx[idx] > 0.5) #Stimulus is to be delivered
     assert( len( FracChR2active ) == len( ReducedPulseIdx ) )
-    chr2Ampl = FracChR2active[idx] * ChR2AmplScale
+    if idx > stimWidthIdx:
+        chr2Ampl = max(FracChR2active[idx-stimWidthIdx:idx]) * ChR2AmplScale
+    else:
+        chr2Ampl = FracChR2active[idx] * ChR2AmplScale
     idx2 = int( round( (t - GABAdelay) / chemDt ) )
     if idx2 >= len( ReducedPulseIdx ):
         return
@@ -491,7 +501,7 @@ def innerMain( args ):
 
     generatePatterns( args )
 
-    rdes = buildModel( args.modelName, args.seed, not args.deterministic, args.volGlu, args.volGABA, args.spiking )
+    rdes = buildModel( args )
     pr = moose.PyRun( "/model/stims/stimRun" )
     #pr.initString = 'print(freq)'
     pr.runString = 'stimFunc({}, {})'.format( patternIdx, args.ChR2_ampl )
@@ -515,7 +525,13 @@ def innerMain( args ):
     moose.reinit()
     moose.start( runtime )
     offset = -90.0 if args.spiking else -70.0
+    plotE = np.zeros( NUM_SAMPLES )
     plot0 = moose.element( '/model/graphs/plot0' ).vector
+    for ee in moose.vec( '/model/graphs/plot1' ):
+        plotE += ee.vector[:NUM_SAMPLES]
+    #print( "numSpinePlots = ", len( moose.vec( '/model/graphs/plot1' ) ) )
+    #plotE = moose.vec( '/model/graphs/plot1' )[gluSynIdx].vector
+    plotI = moose.vec( '/model/graphs/plot2' )[0].vector # Only one dend rec
     dt = moose.element( '/model/graphs/plot0' ).dt
     #t = np.arange( 0, len( plot0 ) * dt - 1e-6, dt )
     if args.voltage_clamp:
@@ -527,10 +543,10 @@ def innerMain( args ):
 
     moose.delete( "/model" )
     moose.delete( "/library" )
-    return (plot0, patternIdx, args.repeatIdx, args.seed)
+    return (plot0, plotE, plotI, patternIdx, args.repeatIdx, args.seed)
 
 def runSession( args ):
-    fname = "{}_{}_{}_{}_{}.h5".format( Path( args.outputFile ).stem, args.volGlu, args.pCA3_CA1, args.pCA3_Inter, args.ChR2_ampl )
+    fname = "{}_{}_{}_{}_{}.h5".format( Path( args.outputFile ).stem, args.wtGlu, args.wtGABA, args.pCA3_Inter, args.ChR2_ampl)
     print( "Working on: ", fname )
     pool = multiprocessing.Pool( processes = args.numProcesses )
     ret = []
@@ -546,8 +562,9 @@ def runSession( args ):
             innerArgs = argparse.Namespace( **argdict )
             ret.append( pool.apply_async( innerMain, args = (innerArgs, )))
     for rr in ret:
-        (plot0, patternIdx, repeatIdx, seed) = rr.get()
-        data.append( makeRow( patternIdx, repeatIdx, plot0, args ) )
+        (plot0, plotE, plotI, patternIdx, repeatIdx, seed) = rr.get()
+        #data.append( makeRow( patternIdx, repeatIdx, plot0, args ) )
+        data.append( makeRow( patternIdx, repeatIdx, plot0, 1e12*plotE, 1e12*plotI, args ) )
     df = pandas.DataFrame(data, columns=pandasColumnNames + [str(i) for i in range( NUM_SAMPLES *4 ) ] )
     #df.to_hdf( args.outputFile, "SimData", mode = "w", format='table', complevel=9)
     df.to_hdf( fname, "SimData", mode = "w", complevel=9)
@@ -571,19 +588,21 @@ def main():
     parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn82.g" )
     parser.add_argument( "-s", "--seed", type = int, help = "Optional: Seed to use for random numbers both for Python and for MOOSE.", default = 1234 )
     parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=1", default = 1.0 )
+    parser.add_argument( "-wglu", "--wtGlu", type = float, help = "Optional: weight scaling factor for Glu synapses. Default=0.5", default = 0.5 )
     parser.add_argument( "-vGABA", "--volGABA", type = float, help = "Optional: Volume scaling factor for GABA synapses. Default=0.5", default = 0.5 )
+    parser.add_argument( "-wGABA", "--wtGABA", type = float, help = "Optional: Weight of GABA synapses. Default=20", default = 20 )
     parser.add_argument( "--pInter_CA1", type = float, help = "Optional: Probability of a given Interneuron connecting to the CA1 cell. Default=0.004 ", default = 0.004 )
-    parser.add_argument( "--pCA3_CA1", type = float, help = "Optional: Probability of a given CA3 cell connecting to the CA1 cell. Default=0.0002 ", default = 0.0002 )
-    parser.add_argument( "--pCA3_Inter", type = float, help = "Optional: Probability of a given CA3 cell connecting to an interneuron. Default=0.0008 ", default = 0.0008 )
+    parser.add_argument( "--pCA3_CA1", type = float, help = "Optional: Probability of a given CA3 cell connecting to the CA1 cell. Default=0.008 ", default = 0.008 )
+    parser.add_argument( "--pCA3_Inter", type = float, help = "Optional: Probability of a given CA3 cell connecting to an interneuron. Default=0.005 ", default = 0.005 )
     parser.add_argument( "--ChR2_ampl", type = float, help = "Optional: Scale factor for ChR2 stimulus amplitude.", default = 1.0 )
 
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
-    for args.volGlu in [0.5, 1.0, 2.0]:
-        for args.pInter_CA1 in [0.02]:
-            for args.pCA3_CA1 in [0.02, 0.05 ]:
-                for args.pCA3_Inter in [0.002, 0.005]:
-                    for args.ChR2_ampl in [1.0]:
+    for args.wtGlu in [ 0.5, 1.0, 2.0]:
+        for args.wtGABA in [5, 10, 20]:
+            for args.pCA3_CA1 in [0.008]:   # at default 0.008
+                for args.pCA3_Inter in [0.005, 0.01]:
+                    for args.ChR2_ampl in [1.0, 5.0]:
                         runSession( args )
 
     
