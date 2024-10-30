@@ -240,9 +240,9 @@ pandasColumnNames = [
 
 colIdx = { nn:idx for idx, nn in enumerate( pandasColumnNames )}
 
-def makeRow( pattern, repeat, data, edata, idata, args ):
+def makeRow( pattern, repeat, data, edata, idata, gedata, gidata, args ):
     #row = [0]*SAMPLE_START + list( data[:NUM_SAMPLES] ) + [0.0]*NUM_SAMPLES + list(TRIG) + [0.0]*NUM_SAMPLES
-    row = [0]*SAMPLE_START + list( data[:NUM_SAMPLES] ) + list( edata[:NUM_SAMPLES] ) + list(TRIG) + list( idata[:NUM_SAMPLES] )
+    row = [0]*SAMPLE_START + list( data[:NUM_SAMPLES] ) + list( edata[:NUM_SAMPLES] ) + list(TRIG) + list( idata[:NUM_SAMPLES] ) + list( gedata[:NUM_SAMPLES] ) + list( gidata[:NUM_SAMPLES] )
     print( "LENS = ", len( row ), len( data ), len( edata ), len( TRIG ), len( idata ) )
     row[colIdx['exptSeq']] = repeat
     row[colIdx["patternList"]] = pattern
@@ -405,7 +405,8 @@ def buildModel( args ):
         ],
         # Some changes to the default passive properties of the cell.
         passiveDistrib = [
-            ['#', 'CM', '0.01', 'Em', '-0.065', 'RM', '1.0']
+            ['soma', 'CM', '0.33', 'Em', '-0.065', 'RM', '0.03'],
+            ['dend#', 'CM', '0.01', 'Em', '-0.065', 'RM', '1.0']
         ],
         chemDistrib = [
             # Args: chem_model, elec_compts, mesh_type, spatial_distrib, r_scalefactor, radius_sdev
@@ -427,6 +428,8 @@ def buildModel( args ):
             firstPlotEntry,
             ['head#', '1', 'glu', 'Ik', 'glu current'],
             ['dend#', '1', 'GABA', 'Ik', 'GABA current'],
+            ['head#', '1', 'glu', 'Gk', 'glu conductance'],
+            ['dend#', '1', 'GABA', 'Gk', 'GABA conductance'],
             ['head#', '1', 'glu/Ca', 'n', 'glu_presyn_Ca'],
             ['dend#', '1', 'GABA/Ca', 'n', 'GABA_presyn_Ca'],
             ['head#', '1', 'glu/Docked', 'n', 'glu_Docked'],
@@ -547,14 +550,6 @@ def innerMain( args ):
     makeNetwork( rdes )
 
     moose.reinit()
-    '''
-    print( "NumGluR = ", len( moose.vec('/model/chem/glu/glu') ),
-        "  NumGABA sites = ", 
-        len(moose.vec( '/model/chem/GABA/GABA' )) )
-    print( "NumSpines = ", len(moose.wildcardFind( '/model/elec/head#' )),
-            "  NumGABA sites = ", 
-            len(moose.wildcardFind( '/model/chem/GABA/GABA[]' )) )
-    '''
     runtime = SAMPLE_TIME
 
     if args.voltage_clamp:
@@ -563,11 +558,15 @@ def innerMain( args ):
     moose.start( runtime )
     offset = -90.0 if args.spiking else -70.0
     plotE = np.zeros( NUM_SAMPLES )
+    plotGE = np.zeros( NUM_SAMPLES )
     plot0 = moose.element( '/model/graphs/plot0' ).vector
     for ee in moose.vec( '/model/graphs/plot1' ):
         plotE += ee.vector[:NUM_SAMPLES]
+    for ee in moose.vec( '/model/graphs/plot3' ):
+        plotGE += ee.vector[:NUM_SAMPLES]
     #print( "numSpinePlots = ", len( moose.vec( '/model/graphs/plot1' ) ) )
     plotI = moose.vec( '/model/graphs/plot2' )[0].vector # Only one dend rec
+    plotGI = moose.vec( '/model/graphs/plot4' )[0].vector # Only one dend rec
     dt = moose.element( '/model/graphs/plot0' ).dt
     #t = np.arange( 0, len( plot0 ) * dt - 1e-6, dt )
     if args.voltage_clamp:
@@ -579,7 +578,7 @@ def innerMain( args ):
 
     moose.delete( "/model" )
     moose.delete( "/library" )
-    return (plot0, plotE, plotI, patternIdx, args.repeatIdx, args.seed)
+    return (plot0, plotE, plotI, plotGE, plotGI, patternIdx, args.repeatIdx, args.seed)
 
 def runSession( args, whichArg ):
     changedValue = 0
@@ -603,14 +602,14 @@ def runSession( args, whichArg ):
             print( "Launching {}.{}".format( freq, ii ) )
             innerArgs = argparse.Namespace( **argdict )
             #ret.append( pool.apply_async( innerMain, args = (innerArgs, )))
-            plot0, plotE, plotI, patternIdx, repeatIdx, seed = innerMain( innerArgs )
-            data.append( makeRow( patternIdx, repeatIdx, 1000*plot0, 1e12*plotE, 1e12*plotI, args ) )
+            plot0, plotE, plotI, plotGE, plotGI, patternIdx, repeatIdx, seed = innerMain( innerArgs )
+            data.append( makeRow( patternIdx, repeatIdx, 1000*plot0, 1e12*plotE, 1e12*plotI, 1e12*plotGE, 1e12*plotGI, args ) )
     '''
     for rr in ret:
         (plot0, patternIdx, repeatIdx, seed) = rr.get()
         data.append( makeRow( patternIdx, repeatIdx, plot0, args ) )
     '''
-    df = pandas.DataFrame(data, columns=pandasColumnNames + [str(i) for i in range( NUM_SAMPLES *4 ) ] )
+    df = pandas.DataFrame(data, columns=pandasColumnNames + [str(i) for i in range( NUM_SAMPLES *6 ) ] )
     #df.to_hdf( args.outputFile, "SimData", mode = "w", format='table', complevel=9)
     df.to_hdf( fname, "SimData", mode = "w", complevel=9)
 
@@ -633,9 +632,9 @@ def main():
     parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn86.g" )
     parser.add_argument( "-s", "--seed", type = int, help = "Optional: Seed to use for random numbers both for Python and for MOOSE.", default = 1234 )
     parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=1", default = 1.0 )
-    parser.add_argument( "-wglu", "--wtGlu", type = float, help = "Optional: weight scaling factor for Glu synapses. Default=0.5", default = 0.5 )
+    parser.add_argument( "-wglu", "--wtGlu", type = float, help = "Optional: weight scaling factor for Glu synapses. Default=20", default = 20 )
     parser.add_argument( "-vGABA", "--volGABA", type = float, help = "Optional: Volume scaling factor for GABA synapses. Default=0.5", default = 0.5 )
-    parser.add_argument( "-wGABA", "--wtGABA", type = float, help = "Optional: Weight of GABA synapses. Default=4", default = 4 )
+    parser.add_argument( "-wGABA", "--wtGABA", type = float, help = "Optional: Weight of GABA synapses. Default=160", default = 160 )
     parser.add_argument( "--pInter_CA1", type = float, help = "Optional: Probability of a given Interneuron connecting to the CA1 cell. Default=0.01 ", default = 0.01 )
     parser.add_argument( "--pCA3_CA1", type = float, help = "Optional: Probability of a given CA3 cell connecting to the CA1 cell. Default=0.02 ", default = 0.02 )
     parser.add_argument( "--pCA3_Inter", type = float, help = "Optional: Probability of a given CA3 cell connecting to an interneuron. Default=0.01 ", default = 0.01 )
@@ -644,6 +643,7 @@ def main():
 
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
+    args.deterministic = True
     runSession( args, "orig" )
 
     

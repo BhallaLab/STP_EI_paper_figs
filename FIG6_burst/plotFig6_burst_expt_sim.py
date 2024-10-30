@@ -136,8 +136,6 @@ def panelEI( ax, dcell, freq, label ):
     '''
     epsc -= baseline # hack to handle traces with large ipsps.
     tepsc = np.linspace( 0, SAMPLE_TIME, len(epsc) )
-    lastPP = 0.0
-    lastIdx = 0
 
     tepsc = tepsc[:int(PLOTLEN*SAMPLE_FREQ)]
     pt = pulseTrig[:len(tepsc)]
@@ -148,12 +146,45 @@ def panelEI( ax, dcell, freq, label ):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.set_ylabel( "E/IPSC (pA)" )
-    ax.legend( loc = "lower right", frameon = False, fontsize = 14 )
+    ax.legend( loc = "upper right", frameon = False, fontsize = 14 )
     #ax.set_ylim( -1.2, max(2, max(epsc)+1 ) )
     ax.text( 0.05, 0.90, str(freq)+" Hz", fontsize = 16, transform=ax.transAxes )
     ax.text( -0.28, 1.05, label, fontsize = 22, weight = "bold", transform=ax.transAxes )
     return -max( epsc ), -min( ipsc ) 
 
+def panelCond( ax, dcell, freq, label ):
+    numExc = 100
+    numInh = 200
+    df = dcell.loc[(dcell['stimFreq'] == freq)]
+    PLOTLEN = 2.5
+    # EPSC data is in and IPSC data is in block 1 and 3 resp.
+    epsg = np.array(df.iloc[0, SAMPLE_START+NUM_SAMPLES*4:SAMPLE_START+NUM_SAMPLES*5 ])
+    pulseTrig = np.array(df.iloc[0, SAMPLE_START+2*NUM_SAMPLES:SAMPLE_START+3*NUM_SAMPLES ] )
+    ipsg = np.array(df.iloc[0, SAMPLE_START+NUM_SAMPLES*5:SAMPLE_START+NUM_SAMPLES*6 ])
+    #field = np.array(df.iloc[0, SAMPLE_START + 3*NUM_SAMPLES:SAMPLE_START+4*NUM_SAMPLES ] )
+    padt = np.pad( pulseTrig, 1 )
+    edges = ((padt[:-1]< 0.02) & (padt[1:]>0.02) )
+    pulses = np.arange(0, NUM_SAMPLES, 1, dtype = int )[edges[:NUM_SAMPLES]]
+    #print( PulseTrain )
+
+    #baseline = np.median( epsc[:int(0.2*SAMPLE_FREQ)] )
+    #epsc -= baseline # hack to handle traces with large ipsps.
+    tepsg = np.linspace( 0, SAMPLE_TIME, len(epsg) )
+
+    tepsg = tepsg[:int(PLOTLEN*SAMPLE_FREQ)]
+    pt = pulseTrig[:len(tepsg)]
+    ax.plot( tepsg, 10e-3*epsg[:len(tepsg)], "b", label = "epsG " )
+    ax.plot( tepsg, 10e-3*ipsg[:len(tepsg)], "r", label = "ipsG " )
+    low = max( epsg )
+    ax.plot( tepsg, pt * low/10 - low*1.2, "g", label = "Trig" )
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.set_ylabel( "E/IPSG (nS)" )
+    ax.legend( loc = "upper right", frameon = False, fontsize = 14 )
+    #ax.set_ylim( -1.2, max(2, max(epsc)+1 ) )
+    ax.text( 0.05, 0.90, str(freq)+" Hz", fontsize = 16, transform=ax.transAxes )
+    ax.text( -0.28, 1.05, label, fontsize = 22, weight = "bold", transform=ax.transAxes )
+    return max( epsg ), max( ipsg ) 
 
 def panelJ( ax, ie, ii, f ):
     ax.plot( f, -np.array(ie), "b", label = "epsc" )
@@ -163,7 +194,7 @@ def panelJ( ax, ie, ii, f ):
     ax.spines['right'].set_visible(False)
     ax.set_ylabel( "E/IPSC pk (pA)" )
     ax.set_xlabel( "Burst Freq (Hz)" )
-    ax.set_ylim( 1, 6.6 )
+    #ax.set_ylim( 1, 6.6 )
     ax.legend( loc = "upper left", frameon = False, fontsize = 14 )
     ax.text( -0.28, 1.05, "J", fontsize = 22, weight = "bold", transform=ax.transAxes )
 
@@ -194,9 +225,9 @@ def main():
 
 
     plt.rcParams.update( {"font.size": 20} )
-    fig = plt.figure( figsize = (10,18) )
+    fig = plt.figure( figsize = (14,18) )
     fig.suptitle( "Cell = {}".format( cellid ), fontsize = 16 )
-    gs = fig.add_gridspec( 5, 2 ) # 5 rows, 2 cols
+    gs = fig.add_gridspec( 5, 3 ) # 5 rows, 3 cols
     #fig, ax = plt.subplots( nrows = 3, ncols=3, figsize = (18, 15) )
 
     # Set up the stimulus timings
@@ -208,6 +239,8 @@ def main():
     vmax = [0.0]*4
     iemax = [0.0]*4
     iimax = [0.0]*4
+    gemax = [0.0]*4
+    gimax = [0.0]*4
     vmax[0] = panelA_SampleTrace( fig.add_subplot( gs[0,0]), celldf, simdf, 20, "A" )
     vmax[1] = panelA_SampleTrace( fig.add_subplot( gs[1,0]), celldf, simdf, 30, "B" )
     vmax[2] = panelA_SampleTrace( fig.add_subplot( gs[2,0]), celldf, simdf, 40, "C" )
@@ -219,6 +252,12 @@ def main():
     iemax[2], iimax[2] = panelEI( fig.add_subplot( gs[2,1]), simdf, 40, "H")
     iemax[3], iimax[3] = panelEI( fig.add_subplot( gs[3,1]), simdf, 50, "I")
     panelJ( fig.add_subplot( gs[4,1] ), iemax, iimax, [20, 30, 40, 50] )
+
+    gemax[0],gimax[0] = panelCond(fig.add_subplot( gs[0,2]), simdf, 20, "K")
+    gemax[1],gimax[1] = panelCond(fig.add_subplot( gs[1,2]), simdf, 30, "L")
+    gemax[2],gimax[2] = panelCond(fig.add_subplot( gs[2,2]), simdf, 40, "M")
+    gemax[3],gimax[3] = panelCond(fig.add_subplot( gs[3,2]), simdf, 50, "N")
+    panelJ( fig.add_subplot( gs[4,2] ), gemax, gimax, [20, 30, 40, 50] )
     
     fig.tight_layout()
     plt.show()
