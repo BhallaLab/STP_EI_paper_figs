@@ -51,12 +51,14 @@ patternData = "../../../2022/VC_DATA/all_cells_SpikeTrain_CC_long.h5"
 SAMPLE_FREQ = 20000
 elecDt = 0.00005
 chemDt = 0.0005
-SAMPLE_TIME = 11
+SAMPLE_TIME = 1
 #SAMPLE_TIME = 2
 NUM_SAMPLES = SAMPLE_FREQ * SAMPLE_TIME
 SAMPLE_START = 49
 SWEEP = 16
 patternDict2 = {}
+TRIG = np.zeros( NUM_SAMPLES )
+ReducedPulseIdx = np.zeros( round(SAMPLE_TIME / chemDt ), dtype=int )
 
 ## Here are params for the ChR2 desensitization
 tauCell = 0.010         # Charging tau through gLeak
@@ -69,31 +71,23 @@ Erest = 0               # Using baseline as zero.
 EChR2 = 60              # Reversal potl in mV relative to baseline.
 ## Here are the params for the charging/firing of CA3 cells due to ChR2
 charge_max = 20.0    
+pt = {}
+TrigOff = 6000 - 630
+pt[20] = np.array([10001,11001,12001,13001,14001,15001,16001,17001])-TrigOff
+pt[30] = np.array([10001,10667,11334,12001,12667,13334,14001,14667])-TrigOff
+pt[40] = np.array([10001,10501,11001,11501,12001,12501,13001,13501])-TrigOff
+pt[50] = np.array([10001,10401,10801,11201,11601,12001,12401,12801])-TrigOff
 
-PulseTrain = np.array([4001,10684,11276,11603,13433,15914,16193,17131,19457,19827,20561,21153,21578,
-    22460,24407,24665,25093,25667,26213,26726,27343,28046,28625,29322,29608,31223,31729,32400,32756,
-    33317,33897,35890,36496,36986,37267,37484,38755,39890,40495,41873,42970,43399,45768,46100,46695,
-    46931,47430,47639,47877,48568,49189,51579,52910,53373,53643,56169,56686,57112,57467,57834,58721,
-    59254,60261,60473,61816,63607,64798,66090,66291,69446,70416,70666,70898,71145,71821,72805,73201,
-    74279,74777,75520,76181,77447,77966,78309,79050,79331,80383,81575,82380,82991,85548,87622,88515,
-    88839,89510,89866,90977,91257,91841,92837,93249,94872,95549,96164,96975,98498,99152,99545,99795,
-    100493,101582,102149,103757,107075,107600,107969,108705,109143,109875,110347,110856,113988,114470,
-    115634,116946,117489,118060,119694,121243,122078,122580,124326,125053,127211,128234,128814,129380,
-    129945,130884,131133,131550,132432,133262,133560,134345,134707,135065,135938,136529,137450,137806,
-    139055,140234,141304,143221,143573,144296,145640,145984,146846,147856,148671,150909,152493,152852,
-    153268,153931,155048,155690,156475,157345,158850,159443,159768,160600,160919,161424,161660,161956,
-    163448,163758,164107,165661,166052,166540,167119,168032,169773,170130,171780,172502,173106,174142,
-    174728,175182,175694,176340,177236,178437,179524,180446,183258,183781,185319,187213,189396,190365,
-    190837,191267,191619,192282,192848,193144,193689,194521,195822,196751,197884,199981,200689,201095,
-    202108,203280,204018,205585,206552,207234,207796,209126,209832])
-
-TRIG = np.zeros( NUM_SAMPLES )
-for ii in PulseTrain:
-    TRIG[ii] = 1.0
-
-ReducedPulseIdx = np.zeros( round(SAMPLE_TIME / chemDt ), dtype=int )
-for pp in PulseTrain:
-    ReducedPulseIdx[round(pp / 10)] = 1
+def updatePulseTrain( freq ):
+    global TRIG
+    global ReducedPulseIdx
+    PulseTrain = pt[freq]
+    TRIG = np.zeros( NUM_SAMPLES )
+    for ii in PulseTrain:
+        TRIG[ii] = 1.0
+    ReducedPulseIdx = np.zeros( round(SAMPLE_TIME / chemDt ), dtype=int )
+    for pp in PulseTrain:
+        ReducedPulseIdx[round(pp / 10)] = 1
 
 def desensitization( events, dt ):
     ret = []
@@ -249,6 +243,7 @@ colIdx = { nn:idx for idx, nn in enumerate( pandasColumnNames )}
 def makeRow( pattern, repeat, data, edata, idata, args ):
     #row = [0]*SAMPLE_START + list( data[:NUM_SAMPLES] ) + [0.0]*NUM_SAMPLES + list(TRIG) + [0.0]*NUM_SAMPLES
     row = [0]*SAMPLE_START + list( data[:NUM_SAMPLES] ) + list( edata[:NUM_SAMPLES] ) + list(TRIG) + list( idata[:NUM_SAMPLES] )
+    print( "LENS = ", len( row ), len( data ), len( edata ), len( TRIG ), len( idata ) )
     row[colIdx['exptSeq']] = repeat
     row[colIdx["patternList"]] = pattern
     row[colIdx["numSq"]] = 5 if pattern < 51 else 15
@@ -256,7 +251,8 @@ def makeRow( pattern, repeat, data, edata, idata, args ):
     row[colIdx["clampMode"]] = "VC" if args.voltage_clamp else "CC"
     # Do clampPotential
     row[colIdx["intensity"]] = 100
-    row[colIdx["protocol"]] = "SpikeTrain"
+    row[colIdx["protocol"]] = "FreqSweep"
+    row[colIdx["stimFreq"]] = args.freq
 
     return row
 
@@ -499,6 +495,12 @@ def stimFunc( patternIdx, ChR2AmplScale ):
 
         gluInput.concInit = (np.matmul( CA3_CA1, ca3cells.Vm ) >= thresh_CA3_CA1 ) * stimAmpl
         #print( "SENSE = ", t, len( sensitization), sum( sensitization ), sum( ca3cells.Vm ), sum(gluInput.concInit ) )
+        '''
+        print( "MEAN CA3_Inter = ", np.mean( np.matmul( CA3_Inter, ca3cells.Vm ) ),
+            " CA3_CA1 = ", np.mean( np.matmul( CA3_CA1, ca3cells.Vm ) ),
+            " Inter_CA1 = ", np.mean( np.matmul( Inter_CA1, Inter.Vm ) ),
+            )
+        '''
         if patternIdx == 46:
             print( "{}  t={:.5f}  NUMGlu={:.1f}    chr2Ampl={:.3f}".format( patternIdx, t, sum( gluInput.concInit ) / stimAmpl, chr2Ampl ), flush=True )
     else:
@@ -565,7 +567,6 @@ def innerMain( args ):
     for ee in moose.vec( '/model/graphs/plot1' ):
         plotE += ee.vector[:NUM_SAMPLES]
     #print( "numSpinePlots = ", len( moose.vec( '/model/graphs/plot1' ) ) )
-    #plotE = moose.vec( '/model/graphs/plot1' )[gluSynIdx].vector
     plotI = moose.vec( '/model/graphs/plot2' )[0].vector # Only one dend rec
     dt = moose.element( '/model/graphs/plot0' ).dt
     #t = np.arange( 0, len( plot0 ) * dt - 1e-6, dt )
@@ -590,18 +591,25 @@ def runSession( args, whichArg ):
     ret = []
     data = []
     argdict = vars( args )
-    for pattern in [46,47,48,49,50,52,53,55]:
+    #for pattern in [46,47,48,49,50,52,53,55]:
+    for freq in [20, 30, 40, 50]:
+        updatePulseTrain( freq )
     #for pattern in [52]:
-        argdict["pattern"] = pattern
+        argdict["pattern"] = 46
+        argdict["freq"] = freq
         for ii in range( args.numRepeats ):
             argdict["repeatIdx"] = ii
-            argdict["seed"] = args.seed + pattern * args.numRepeats + ii
-            print( "Launching {}.{}".format( pattern, ii ) )
+            #argdict["seed"] = args.seed + argdict["pattern"] * args.numRepeats + ii
+            print( "Launching {}.{}".format( freq, ii ) )
             innerArgs = argparse.Namespace( **argdict )
-            ret.append( pool.apply_async( innerMain, args = (innerArgs, )))
+            #ret.append( pool.apply_async( innerMain, args = (innerArgs, )))
+            plot0, plotE, plotI, patternIdx, repeatIdx, seed = innerMain( innerArgs )
+            data.append( makeRow( patternIdx, repeatIdx, 1000*plot0, 1e12*plotE, 1e12*plotI, args ) )
+    '''
     for rr in ret:
-        (plot0, plotE, plotI, patternIdx, repeatIdx, seed) = rr.get()
-        data.append( makeRow( patternIdx, repeatIdx, plot0, 1e12*plotE, 1e12*plotI, args ) )
+        (plot0, patternIdx, repeatIdx, seed) = rr.get()
+        data.append( makeRow( patternIdx, repeatIdx, plot0, args ) )
+    '''
     df = pandas.DataFrame(data, columns=pandasColumnNames + [str(i) for i in range( NUM_SAMPLES *4 ) ] )
     #df.to_hdf( args.outputFile, "SimData", mode = "w", format='table', complevel=9)
     df.to_hdf( fname, "SimData", mode = "w", complevel=9)
@@ -637,51 +645,6 @@ def main():
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
     runSession( args, "orig" )
-
-    orig = args.wtGlu
-    for args.wtGlu in [0.2, 1.0]:
-        runSession( args, "wtGlu" )
-    args.wtGlu = orig
-
-    orig = args.wtGABA
-    for args.wtGABA in [2, 10]:
-        runSession( args, "wtGABA" )
-    args.wtGABA = orig
-
-    orig = args.pCA3_CA1
-    for args.pCA3_CA1 in [0.01, 0.05]:
-        runSession( args, "pCA3_CA1" )
-    args.pCA3_CA1 = orig
-
-    orig = args.pCA3_Inter
-    for args.pCA3_Inter in [0.005, 0.02]:
-        runSession( args, "pCA3_Inter" )
-    args.pCA3_Inter = orig
-
-    orig = args.pInter_CA1
-    for args.pInter_CA1 in [0.005, 0.02]:
-        runSession( args, "pInter_CA1" )
-    args.pInter_CA1 = orig
-
-    orig = args.zeroIndices
-    for args.zeroIndices in [64, 96, 128, 224]:
-        runSession( args, "zeroIndices" )
-    args.zeroIndices = orig
-
-    '''
-    orig = args.ChR2_ampl
-    for args.ChR2_ampl in [0.5, 2.0]:
-        runSession( args, "ChR2_ampl" )
-    args.ChR2_ampl = orig
-    '''
-
-    args.modelName = "BothPresyn87.g"
-    runSession( args, "modelName" )
-
-    args.modelName = "BothPresyn86.g"
-    args.deterministic = True
-    args.numRepeats = 1
-    runSession( args, "deterministic" )
 
     
 if __name__ == "__main__":

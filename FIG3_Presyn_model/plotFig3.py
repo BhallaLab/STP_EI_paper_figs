@@ -19,7 +19,7 @@ def doPlot( dataset, idx, panel, freq, doProb = False ):
         print("Not found: Expts/fs_{0}_{1}_pk.json".format(dataset,freq))
         return
     ax = plt.subplot( 3, 2, idx )
-    ax.text( -0.10, 1.05, panel, fontsize = 22, weight = "bold", 
+    ax.text( -0.25, 1.05, panel, fontsize = 22, weight = "bold", 
         transform=ax.transAxes )
     if doProb:
         score, elapsedTime, diagnostics = findSim.innerMain( 
@@ -46,6 +46,7 @@ def doPlot( dataset, idx, panel, freq, doProb = False ):
         dny = ey[1::2]
         ax.plot( upx, upy, "bo-" )
         ax.plot( dnx, dny, "bo-" )
+        ax.text( 0.70, 0.85, "{} Hz".format( freq ), fontsize = 16, transform=ax.transAxes )
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.lines[2].set_visible( False )
@@ -79,7 +80,7 @@ def doScoreHisto( ax ):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.legend( fontsize = 14, frameon = False )
-    ax.text( -0.10, 1.05, "G", fontsize = 22, weight = "bold",
+    ax.text( -0.25, 1.05, "G", fontsize = 22, weight = "bold",
         transform=ax.transAxes )
 
 

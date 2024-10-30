@@ -27,8 +27,11 @@ PulseTrain = {}
 
 def panelA_SampleTrace( ax, dcell, dsim, freq, label ):
     df = dcell.loc[(dcell['stimFreq'] == freq) & (dcell['numSq'] == 5)]
+    cellid = df['cellID'].unique()[0]
+    shift = int( SAMPLE_FREQ * 0.3 ) - 600 if cellid in [5611, 1941] else 0
+    print( cellid, shift )
     PLOTLEN = 2.5
-    epsp = np.mean(np.array(df.iloc[:, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ]), axis = 0 )
+    epsp = np.mean(np.array(df.iloc[:, SAMPLE_START:SAMPLE_START+NUM_SAMPLES+shift]), axis = 0 )
     pulseTrig = np.array(df.iloc[0, SAMPLE_START+2*NUM_SAMPLES:SAMPLE_START+3*NUM_SAMPLES ] )
     df2 = dsim.loc[dsim['stimFreq'] == freq]
     simepsp = np.mean(np.array(df2.iloc[:, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ]), axis = 0 )
@@ -41,10 +44,11 @@ def panelA_SampleTrace( ax, dcell, dsim, freq, label ):
     epsp -= baseline # hack to handle traces with large ipsps.
     baseline = np.median( simepsp[:int(0.2*SAMPLE_FREQ)] )
     simepsp -= baseline # hack to handle traces with large ipsps.
-    tepsp = np.linspace( 0, SAMPLE_TIME, len(epsp) )
-    tepsp = tepsp[:int(PLOTLEN*SAMPLE_FREQ)]
+    tepsp = np.linspace( 0, SAMPLE_TIME, SAMPLE_FREQ )
+    #tepsp = np.linspace( 0, SAMPLE_TIME, len(epsp) )
+    #tepsp = tepsp[:int(PLOTLEN*SAMPLE_FREQ)]
     pt = pulseTrig[:len(tepsp)]
-    ax.plot( tepsp, epsp[:len(tepsp)], "m", label = "Expt" )
+    ax.plot( tepsp, epsp[shift:len(tepsp)+shift], "m", label = "Expt" )
     ax.plot( tepsp, simepsp[:len(tepsp)], "y", label = "Sim" )
     ax.plot( tepsp, pt * 0.5 - 1, "g", label = "Trig" )
     ax.spines['top'].set_visible(False)
@@ -159,7 +163,7 @@ def panelJ( ax, ie, ii, f ):
     ax.spines['right'].set_visible(False)
     ax.set_ylabel( "E/IPSC pk (pA)" )
     ax.set_xlabel( "Burst Freq (Hz)" )
-    ax.set_ylim( 1, 5.5 )
+    ax.set_ylim( 1, 6.6 )
     ax.legend( loc = "upper left", frameon = False, fontsize = 14 )
     ax.text( -0.28, 1.05, "J", fontsize = 22, weight = "bold", transform=ax.transAxes )
 
@@ -169,7 +173,8 @@ def main():
     global pulseTrig
     parser = argparse.ArgumentParser( description = "Read and display surprise protocol data from specified file" )
     parser.add_argument( "-e", "--exptFname", type = str, help = "Optional: File with exptdata. Required to be hdf5.", default = "../../../2022/VC_DATA/all_cells_FreqSweep_CC_long.h5"  )
-    parser.add_argument( "-s", "--simFname", type = str, help = "Optional: File with simdata. Required to be hdf5.", default = "EI_FIXSEED_NO_PREPULSE/dei_wtGlu_0.3.h5" )
+    parser.add_argument( "-s", "--simFname", type = str, help = "Optional: File with simdata. Required to be hdf5.", default = "simData_orig_0.h5" )
+    parser.add_argument( "-c", "--cell", type = int, help = "Optional: Cell number to use. default = 3531", default = 3531 )
     args = parser.parse_args()
     cellid = 1941
     cellid = 5611
@@ -185,6 +190,7 @@ def main():
     cellid = 3872 # spikes
     cellid = 3871 # spikes
     cellid = 3531
+    cellid = args.cell
 
 
     plt.rcParams.update( {"font.size": 20} )
