@@ -146,7 +146,7 @@ def panelEI( ax, dcell, freq, label ):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.set_ylabel( "E/IPSC (pA)" )
-    ax.legend( loc = "upper right", frameon = False, fontsize = 14 )
+    ax.legend( loc = "lower right", frameon = False, fontsize = 14 )
     #ax.set_ylim( -1.2, max(2, max(epsc)+1 ) )
     ax.text( 0.05, 0.90, str(freq)+" Hz", fontsize = 16, transform=ax.transAxes )
     ax.text( -0.28, 1.05, label, fontsize = 22, weight = "bold", transform=ax.transAxes )
@@ -173,9 +173,9 @@ def panelCond( ax, dcell, freq, label ):
 
     tepsg = tepsg[:int(PLOTLEN*SAMPLE_FREQ)]
     pt = pulseTrig[:len(tepsg)]
-    ax.plot( tepsg, 10e-3*epsg[:len(tepsg)], "b", label = "epsG " )
-    ax.plot( tepsg, 10e-3*ipsg[:len(tepsg)], "r", label = "ipsG " )
-    low = max( epsg )
+    ax.plot( tepsg, 1e-3*epsg[:len(tepsg)], "b", label = "epsG " )
+    ax.plot( tepsg, 1e-3*ipsg[:len(tepsg)], "r", label = "ipsG " )
+    low = max( epsg*1e-3 )
     ax.plot( tepsg, pt * low/10 - low*1.2, "g", label = "Trig" )
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -184,7 +184,7 @@ def panelCond( ax, dcell, freq, label ):
     #ax.set_ylim( -1.2, max(2, max(epsc)+1 ) )
     ax.text( 0.05, 0.90, str(freq)+" Hz", fontsize = 16, transform=ax.transAxes )
     ax.text( -0.28, 1.05, label, fontsize = 22, weight = "bold", transform=ax.transAxes )
-    return max( epsg ), max( ipsg ) 
+    return max( epsg )/1000, max( ipsg )/1000 
 
 def panelJ( ax, ie, ii, f ):
     ax.plot( f, -np.array(ie), "b", label = "epsc" )
@@ -194,9 +194,22 @@ def panelJ( ax, ie, ii, f ):
     ax.spines['right'].set_visible(False)
     ax.set_ylabel( "E/IPSC pk (pA)" )
     ax.set_xlabel( "Burst Freq (Hz)" )
-    #ax.set_ylim( 1, 6.6 )
+    ax.set_ylim( 1, 6.6 )
     ax.legend( loc = "upper left", frameon = False, fontsize = 14 )
     ax.text( -0.28, 1.05, "J", fontsize = 22, weight = "bold", transform=ax.transAxes )
+
+
+def panelO( ax, ie, ii, f ):
+    ax.plot( f, np.array(ie), "b", label = "epsG" )
+    ax.plot( f, ii, "r", label = "ipsG" )
+    ax.plot( f, np.array(ie) / np.array(ii), "k", label = "ratio" )
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.set_ylabel( "Gmax (nS)" )
+    ax.set_xlabel( "Burst Freq (Hz)" )
+    ax.set_ylim( 0, 0.66 )
+    ax.legend( loc = "upper left", frameon = False, fontsize = 14 )
+    ax.text( -0.28, 1.05, "O", fontsize = 22, weight = "bold", transform=ax.transAxes )
 
 
 
@@ -257,7 +270,7 @@ def main():
     gemax[1],gimax[1] = panelCond(fig.add_subplot( gs[1,2]), simdf, 30, "L")
     gemax[2],gimax[2] = panelCond(fig.add_subplot( gs[2,2]), simdf, 40, "M")
     gemax[3],gimax[3] = panelCond(fig.add_subplot( gs[3,2]), simdf, 50, "N")
-    panelJ( fig.add_subplot( gs[4,2] ), gemax, gimax, [20, 30, 40, 50] )
+    panelO( fig.add_subplot( gs[4,2] ), gemax, gimax, [20, 30, 40, 50] )
     
     fig.tight_layout()
     plt.show()

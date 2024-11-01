@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 import rdesigneur as rd
-import multiprocessing
+import rdesigneur.rmoogli as rmoogli
 from pathlib import Path
 import argparse
 
@@ -24,7 +24,7 @@ gluR_clamp_potl = "-0.07"
 GABAR_clamp_potl = "0.0"
 GABAR_clamp_offset = 0.1    # nA
 gluConductanceScale = 2   # Relative to default value in the spine proto
-gluTau2Scale = 2   # Relative to default value in the spine proto
+gluTau2Scale = 1   # Relative to default value in the spine proto
 
 numCA1Exc = 100
 numCA1Inh = 200
@@ -47,47 +47,33 @@ inputs = []
 stimList = []
 pulseTrig = []
 pulseThresh = 0.001
-patternData = "../../../2022/VC_DATA/all_cells_SpikeTrain_CC_long.h5"
 SAMPLE_FREQ = 20000
 elecDt = 0.00005
 chemDt = 0.0005
-SAMPLE_TIME = 1
-#SAMPLE_TIME = 2
+SAMPLE_TIME = 1.5
 NUM_SAMPLES = SAMPLE_FREQ * SAMPLE_TIME
 SAMPLE_START = 49
 SWEEP = 16
 patternDict2 = {}
-TRIG = np.zeros( NUM_SAMPLES )
-ReducedPulseIdx = np.zeros( round(SAMPLE_TIME / chemDt ), dtype=int )
 
 ## Here are params for the ChR2 desensitization
 tauCell = 0.010         # Charging tau through gLeak
 ChR2chanOpenTime = 0.001     # Balances out tauChR2chan
 tauChR2chan = 0.005     # Charging tau through ChR2chan.
-tauChR2recovery = 1.5   # Tau for recovery
-ChR2decrement = 0.0004  # Scaling for decrement
+tauChR2recovery = 2.5   # Tau for recovery
+ChR2decrement = 0.0006  # Scaling for decrement
 ChR2_basal_desensitization = 0.01
 Erest = 0               # Using baseline as zero.
-EChR2 = 60              # Reversal potl in mV relative to baseline.
-## Here are the params for the charging/firing of CA3 cells due to ChR2
-charge_max = 20.0    
-pt = {}
-TrigOff = 6000 - 630
-pt[20] = np.array([10001,11001,12001,13001,14001,15001,16001,17001])-TrigOff
-pt[30] = np.array([10001,10667,11334,12001,12667,13334,14001,14667])-TrigOff
-pt[40] = np.array([10001,10501,11001,11501,12001,12501,13001,13501])-TrigOff
-pt[50] = np.array([10001,10401,10801,11201,11601,12001,12401,12801])-TrigOff
+EChR2 = 30              # Reversal potl in mV relative to baseline.
 
 def updatePulseTrain( freq ):
-    global TRIG
-    global ReducedPulseIdx
-    PulseTrain = pt[freq]
-    TRIG = np.zeros( NUM_SAMPLES )
-    for ii in PulseTrain:
-        TRIG[ii] = 1.0
     ReducedPulseIdx = np.zeros( round(SAMPLE_TIME / chemDt ), dtype=int )
-    for pp in PulseTrain:
-        ReducedPulseIdx[round(pp / 10)] = 1
+    ReducedPulseIdx[int(round(0.2 / chemDt) ) ] = 1
+
+    for pp in range( 32 ):
+        ReducedPulseIdx[int(round( (0.5 + pp/freq) / chemDt)) ] = 1
+
+    return ReducedPulseIdx
 
 def desensitization( events, dt ):
     ret = []
@@ -107,8 +93,6 @@ def desensitization( events, dt ):
         Vm += dt * (Erest-Vm)/tauCell
         ret.append( Vm )
     return np.array( ret )
-        
-FracChR2active = desensitization( ReducedPulseIdx, chemDt )
 
 def patternDict():
     patternZeros = [0]*64
@@ -240,19 +224,23 @@ pandasColumnNames = [
 
 colIdx = { nn:idx for idx, nn in enumerate( pandasColumnNames )}
 
-def makeRow( pattern, repeat, data, edata, idata, gedata, gidata, args ):
-    #row = [0]*SAMPLE_START + list( data[:NUM_SAMPLES] ) + [0.0]*NUM_SAMPLES + list(TRIG) + [0.0]*NUM_SAMPLES
-    row = [0]*SAMPLE_START + list( data[:NUM_SAMPLES] ) + list( edata[:NUM_SAMPLES] ) + list(TRIG) + list( idata[:NUM_SAMPLES] ) + list( gedata[:NUM_SAMPLES] ) + list( gidata[:NUM_SAMPLES] )
-    print( "LENS = ", len( row ), len( data ), len( edata ), len( TRIG ), len( idata ) )
-    row[colIdx['exptSeq']] = repeat
-    row[colIdx["patternList"]] = pattern
-    row[colIdx["numSq"]] = 5 if pattern < 51 else 15
-    row[colIdx["sweep"]] = pattern * args.numRepeats + repeat
+def makeRow( data, args ):
+    TRIG = np.zeros( NUM_SAMPLES )
+    TRIG[int( round( 0.2*SAMPLE_FREQ ) )] = 1.0
+    for ii in range(32):
+        idx = int( round (0.5 * SAMPLE_FREQ + ii*SAMPLE_FREQ/args.freq) )
+        TRIG[idx] = 1.0
+        #print( ii, "TRIG = ", idx )
+    row = [0]*SAMPLE_START + list( data[:NUM_SAMPLES] ) + [0.0]*NUM_SAMPLES + list(TRIG) + [0.0]*NUM_SAMPLES
+    row[colIdx['exptSeq']] = 0
+    row[colIdx["patternList"]] = [46,47,48,49]
+    row[colIdx["numSq"]] = 5
+    row[colIdx["sweep"]] = args.repeatIdx
+    row[colIdx["stimFreq"]] = args.freq
     row[colIdx["clampMode"]] = "VC" if args.voltage_clamp else "CC"
     # Do clampPotential
     row[colIdx["intensity"]] = 100
-    row[colIdx["protocol"]] = "FreqSweep"
-    row[colIdx["stimFreq"]] = args.freq
+    row[colIdx["protocol"]] = "surprise"
 
     return row
 
@@ -305,7 +293,7 @@ def generatePatterns( args ):
     pd = patternDict()
 
     # Assumes all are random projections.
-    np.random.seed( args.seed )
+    np.random.seed( args.seedConnections )
     CA3_Inter = (np.random.rand( 256, 256 ) < args.pCA3_Inter) * 1.0
     CA3_CA1 = (np.random.rand( numCA1Exc, 256 ) < args.pCA3_CA1) * 1.0
     Inter_CA1 = (np.random.rand( numCA1Inh, 256 ) < args.pInter_CA1) * 1.0
@@ -403,9 +391,9 @@ def buildModel( args ):
             ['make_K_DR()', 'K'],
             ['make_GABA()', 'GABA']
         ],
-        # Some changes to the default passive properties of the cell.
+        # Assign passive properties of the cell.
         passiveDistrib = [
-            ['#', 'CM', '0.01', 'Em', '-0.065', 'RM', '1.0']
+            ['#', 'CM', '0.01', 'Em', '-0.065', 'RM', '0.2']
         ],
         chemDistrib = [
             # Args: chem_model, elec_compts, mesh_type, spatial_distrib, r_scalefactor, radius_sdev
@@ -427,8 +415,6 @@ def buildModel( args ):
             firstPlotEntry,
             ['head#', '1', 'glu', 'Ik', 'glu current'],
             ['dend#', '1', 'GABA', 'Ik', 'GABA current'],
-            ['head#', '1', 'glu', 'Gk', 'glu conductance'],
-            ['dend#', '1', 'GABA', 'Gk', 'GABA conductance'],
             ['head#', '1', 'glu/Ca', 'n', 'glu_presyn_Ca'],
             ['dend#', '1', 'GABA/Ca', 'n', 'GABA_presyn_Ca'],
             ['head#', '1', 'glu/Docked', 'n', 'glu_Docked'],
@@ -437,9 +423,14 @@ def buildModel( args ):
             ['dend#', '1', 'GABA/RR_pool', 'n', 'GABA_RR'],
             ['head#', '1', 'glu/glu', 'n', 'glu_released'],
             ['dend#', '1', 'GABA/GABA', 'n', 'GABA_released'],
+        ],
+        moogList = [
+            ['#', '1', '.', 'Vm', 'Cell Vm', -70.0, -60.0],
+            ['#', '1', 'glu/Docked', 'n', 'Glu Dock n', 0.0, 20.0],
+            ['#', '1', 'GABA/Docked', 'n', 'GABA Dock n', 0.0, 20.0]
         ]
     )
-    moose.seed( args.seed ) 
+    moose.seed( args.seedStochastic ) 
     gluReceptor = moose.element( '/library/spine/head/glu' )
     gluReceptor.Gbar *= args.wtGlu # Tweak conductance
     #print ( "GLUGGGGG = ", vGlu, gluConductanceScale )
@@ -458,36 +449,42 @@ def buildModel( args ):
     moose.reinit()
     return rdes
 
+def isPulse( freq, t ):
+    if t < 0.13:
+        return False, 0
+    elif t < (0.13 + stimWidth):
+        return True, 0
+    elif t < (0.20 ):
+        return False, 0
+    elif t < (0.20 + stimWidth*2):
+        return True, 0
+    burstStart = 0.68
+    pulseNum = int( round( (t - burstStart) * freq ) )
+    if pulseNum > 31:
+        return False, 0
+    pulseT = burstStart - 1e-5 + pulseNum / freq
+    if ( t > (burstStart - 1e-5) and t > pulseT and t < (pulseT + stimWidth )) :
+        #print( "pulseNum ={}, t = {:.4f}, freq={:.4f}, patIdx = {}".format( pulseNum, t, freq, pulseNum//8 ) )
+        return True, pulseNum//8
+    
+    return False, 0
 
-def stimFunc( patternIdx, ChR2AmplScale ):
+
+def stimFunc( freq, ChR2AmplScale ):
     t = moose.element( '/clock' ).currentTime
-    # Need to look up if this is time to generate pulse. 
-    stimWidthIdx = int( round( stimWidth / chemDt ) )
+    CA3isActive, patternIdx = isPulse( freq, t )
+    InterIsActive, patternIdx2 = isPulse( freq, t - GABAdelay )
     idx = int(round( t/chemDt ) )
-    if idx % int( 1.0/chemDt )  == 0:   # dot every second.
-        print( ".", flush = True, end = "" )
-    if idx >= len( ReducedPulseIdx ):
+    if idx >= len( FracChR2active ):
         return
-    # Stim is to be delivered for the entire duration of stimWidth.
-    CA3isActive = ( sum( ReducedPulseIdx[idx-stimWidthIdx:idx] ) > 0.1 )
-    #CA3isActive = (ReducedPulseIdx[idx] > 0.5) #Stimulus is to be delivered
-    assert( len( FracChR2active ) == len( ReducedPulseIdx ) )
-    if idx > stimWidthIdx:
-        chr2Ampl = max(FracChR2active[idx-stimWidthIdx:idx]) * ChR2AmplScale
-    else:
-        chr2Ampl = FracChR2active[idx] * ChR2AmplScale
-    idx2 = int( round( (t - GABAdelay) / chemDt ) )
-    if idx2 >= len( ReducedPulseIdx ):
-        return
-    InterIsActive = ( sum( ReducedPulseIdx[idx2-stimWidthIdx:idx2] ) > 0.5 )
-    #InterIsActive = ( ReducedPulseIdx[idx2] > 0.5 )
+    chr2Ampl = FracChR2active[idx] * ChR2AmplScale
     gluInput = moose.vec( "/model/chem/glu/Ca_ext" )
     gabaInput = moose.vec( "/model/chem/GABA/Ca_ext" )
     if CA3isActive:
-        #print( "Trig CA3 at {:.3f} {} with {}".format( t, idx, patternIdx ))
-        inputPattern = patternDict2[patternIdx]
+        #inputPattern = patternDict2[46 + patternIdx]
+        #print( "Trig CA3 at {:.3f} {} with {} @ {:.3f}".format( t, idx, patternIdx, chr2Ampl ))
         ca3cells = moose.vec( "/model/elec/CA3/soma" )
-        pd = patternDict2[patternIdx]
+        pd = patternDict2[46 + patternIdx]
         ca3cells.Vm = pd
         '''
         #ca3cells.Vm = np.where( np.random.rand(len(pd)) < chr2Ampl, pd, 0 )
@@ -496,24 +493,16 @@ def stimFunc( patternIdx, ChR2AmplScale ):
         '''
 
         gluInput.concInit = (np.matmul( CA3_CA1, ca3cells.Vm ) >= thresh_CA3_CA1 ) * stimAmpl
-        #print( "SENSE = ", t, len( sensitization), sum( sensitization ), sum( ca3cells.Vm ), sum(gluInput.concInit ) )
-        '''
-        print( "MEAN CA3_Inter = ", np.mean( np.matmul( CA3_Inter, ca3cells.Vm ) ),
-            " CA3_CA1 = ", np.mean( np.matmul( CA3_CA1, ca3cells.Vm ) ),
-            " Inter_CA1 = ", np.mean( np.matmul( Inter_CA1, Inter.Vm ) ),
-            )
-        '''
-        if patternIdx == 46:
-            print( "{}  t={:.5f}  NUMGlu={:.1f}    chr2Ampl={:.3f}".format( patternIdx, t, sum( gluInput.concInit ) / stimAmpl, chr2Ampl ), flush=True )
+        #print( "{}  t={:.5f} idx={}  NUMGlu={:.1f}    chr2Ampl={:.3f}".format( 46+patternIdx, t, idx, sum( gluInput.concInit ) / stimAmpl, chr2Ampl ), flush=True )
     else:
         moose.vec( "/model/elec/CA3/soma" ).Vm = 0.0
         gluInput.concInit = basalCa
 
     if InterIsActive:
-        pd = patternDict2[patternIdx]
+        pd = patternDict2[46 + patternIdx]
         amplIdx = min( len( pd ), int( chr2Ampl * len( pd ) ) )
         #pd = np.where( np.random.rand( len( pd ) ) < chr2Ampl, pd, 0 )
-        #pd =  np.append( pd[:amplIdx], np.zeros( len(pd)-amplIdx ) )
+        pd =  np.append( pd[:amplIdx], np.zeros( len(pd)-amplIdx ) )
 
         Inter = moose.vec( "/model/elec/Inter/soma" )
         Inter.Vm = (np.matmul( CA3_Inter, pd) >= thresh_CA3_Inter ) * 1.0
@@ -529,8 +518,15 @@ def makeNetwork( rdes ):
     origNeuronId = rdes.elecid
     CA3cells, CA3args = makeInputs( "CA3", 20e-6 )
     interneurons, interneuronArgs = makeInputs( "Inter", 70e-6 )
+    rdes.elecid = moose.element( "/model/elec/CA3" )
+    rdes.moogNames.append( rmoogli.makeMoogli( rdes, CA3cells, CA3args, rd.knownFieldsDefault['Vm'] ) )
+    rdes.elecid = moose.element( "/model/elec/Inter" )
+    rdes.moogNames.append( rmoogli.makeMoogli( rdes, interneurons, interneuronArgs, rd.knownFieldsDefault['Vm'] ) )
+    rdes.elecId = origNeuronId
 
-def innerMain( args ):
+def innerMain( args, ReducedPulseIdx ):
+    global FracChR2active
+    FracChR2active = desensitization( ReducedPulseIdx, chemDt )
     patternIdx = args.pattern
     if args.voltage_clamp:
         stimList = [['soma', '1', '.', 'vclamp', '-0.070' ]]
@@ -543,7 +539,7 @@ def innerMain( args ):
 
     rdes = buildModel( args )
     pr = moose.PyRun( "/model/stims/stimRun" )
-    pr.runString = 'stimFunc({}, {})'.format( patternIdx, args.ChR2_ampl )
+    pr.runString = 'stimFunc({}, {})'.format( args.freq, args.ChR2_ampl )
     pr.tick = 14 # This would be chemDt. Which is currently 0.5 ms.
 
     makeNetwork( rdes )
@@ -551,33 +547,113 @@ def innerMain( args ):
     moose.reinit()
     runtime = SAMPLE_TIME
 
-    if args.voltage_clamp:
-        moose.element( "/model/stims/stim0" ).expr = gluR_clamp_potl
+    # This time we reseed it so that the stoch runs differ.
+    moose.seed( args.seedStochastic + args.freq * args.numRepeats + args.repeatIdx )
     moose.reinit()
-    moose.start( runtime )
-    offset = -90.0 if args.spiking else -70.0
-    plotE = np.zeros( NUM_SAMPLES )
-    plotGE = np.zeros( NUM_SAMPLES )
-    plot0 = moose.element( '/model/graphs/plot0' ).vector
-    for ee in moose.vec( '/model/graphs/plot1' ):
-        plotE += ee.vector[:NUM_SAMPLES]
-    for ee in moose.vec( '/model/graphs/plot3' ):
-        plotGE += ee.vector[:NUM_SAMPLES]
-    #print( "numSpinePlots = ", len( moose.vec( '/model/graphs/plot1' ) ) )
-    plotI = moose.vec( '/model/graphs/plot2' )[0].vector # Only one dend rec
-    plotGI = moose.vec( '/model/graphs/plot4' )[0].vector # Only one dend rec
-    dt = moose.element( '/model/graphs/plot0' ).dt
-    #t = np.arange( 0, len( plot0 ) * dt - 1e-6, dt )
-    if args.voltage_clamp:
-        moose.element( "/model/stims/stim0" ).expr = GABAR_clamp_potl
-        moose.reinit()
-        moose.start( runtime )
-        plot0 = moose.element( '/model/graphs/plot0' ).vector
-        plot0[:10] = GABAR_clamp_offset / 1e12  # clear out transient
+    '''
+    animation = [rd.AnimationEvent( "x", 0.0 )] * 2   # Sensitivity
+    animation += [rd.AnimationEvent( "$Test12343234234234234", 0.01 )]
+    animation += [rd.AnimationEvent( "$ppppp\nqqqqq", 0.07 )]
+    animation += [rd.AnimationEvent( "0", 0.1 )]
+    animation += [rd.AnimationEvent( "1", 0.11 )]
+    animation += [rd.AnimationEvent( "2", 0.12 )]
+    animation += [rd.AnimationEvent( "2", 0.125 )]
+    animation += [rd.AnimationEvent( "1", 0.13 )]
+    animation += [rd.AnimationEvent( "0", 0.135 )]
+    animation += [rd.AnimationEvent( "$Boogie woogie", 0.14 )]
+    animation += [rd.AnimationEvent( "j", ii*0.02 + 0.2 ) for ii in range (4)]
+    animation += [rd.AnimationEvent( "k", ii*0.01 + 0.25 ) for ii in range(4)]
+    animation += [rd.AnimationEvent( "l", 0.3 )] * 1
+    animation += [rd.AnimationEvent( "D", 0.4 )] * 1
+    '''
+    animation = [rd.AnimationEvent( "x", 0.0 )] * 4   # Sensitivity
+    animation += [rd.AnimationEvent( "l", 0.0 )]*2
+    animation += [rd.AnimationEvent( "j", 0.0 )]*5
+    animation += [rd.AnimationEvent( ">", 0.0 )]*8
+
+    animation += [rd.AnimationEvent( "$Asopa and Bhalla: Model of optogenetic stimulation\nof CA3->CA1 circuit with stochastic presynaptic STP.", 0.01 )]
+    animation += [rd.AnimationEvent( "$$", 0.08 )]
+    animation += [rd.AnimationEvent( "$This is CA3, which receives optogenetic patterned stimuli", 0.09 )]
+    animation += [rd.AnimationEvent( "3", 0.1 )]
+    animation += [rd.AnimationEvent( "3", 0.105 )]
+    animation += [rd.AnimationEvent( "3", 0.110 )]
+    animation += [rd.AnimationEvent( "3", 0.115 )]
+    animation += [rd.AnimationEvent( "3", 0.120 )]
+    animation += [rd.AnimationEvent( "3", 0.125 )]
+
+    animation += [rd.AnimationEvent( "$These are interneurons, activated by CA3.", 0.16 )]
+    animation += [rd.AnimationEvent( "4", 0.16 )]
+    animation += [rd.AnimationEvent( "4", 0.165 )]
+    animation += [rd.AnimationEvent( "4", 0.170 )]
+    animation += [rd.AnimationEvent( "4", 0.175 )]
+    animation += [rd.AnimationEvent( "4", 0.18 )]
+    animation += [rd.AnimationEvent( "4", 0.185 )]
+
+
+    animation += [rd.AnimationEvent( "$This is a ball-and-stick model of the cell.\nIt is activated by CA3 and inhibited by interneurons.", 0.22 )]
+    animation += [rd.AnimationEvent( "0", 0.225 )]
+    animation += [rd.AnimationEvent( "0", 0.23 )]
+    animation += [rd.AnimationEvent( "0", 0.235 )]
+    animation += [rd.AnimationEvent( "0", 0.24 )]
+    animation += [rd.AnimationEvent( "0", 0.245 )]
+    animation += [rd.AnimationEvent( "0", 0.25 )]
+    animation += [rd.AnimationEvent( "0", 0.255 )]
+    animation += [rd.AnimationEvent( "0", 0.26 )]
+
+    animation += [rd.AnimationEvent( "$  ", 0.27 )]
+    animation += [rd.AnimationEvent( "$$", 0.27 )]
+    animation += [rd.AnimationEvent( "l", ii*0.001 + 0.28 ) for ii in range (16)]
+    animation += [rd.AnimationEvent( ">", ii*0.001 + 0.30 ) for ii in range (94)]
+    animation += [rd.AnimationEvent( "4", 0.45 )]
+    animation += [rd.AnimationEvent( "$These are Glutamatergic presynaptic boutons on spines.", 0.45 )]
+    animation += [rd.AnimationEvent( "0", 0.45 )]
+    animation += [rd.AnimationEvent( "2", 0.45 )]
+    animation += [rd.AnimationEvent( "1", 0.46 )]
+    animation += [rd.AnimationEvent( "D", 0.46 )]*6
+    animation += [rd.AnimationEvent( "1", 0.465 )]
+    animation += [rd.AnimationEvent( "1", 0.47 )]
+    animation += [rd.AnimationEvent( "1", 0.475 )]
+    animation += [rd.AnimationEvent( "1", 0.48 )]
+    animation += [rd.AnimationEvent( "1", 0.485 )]
+
+
+    animation += [rd.AnimationEvent( "$These are GABAergic presynaptic boutons on the dendrite.", 0.55 )]
+    animation += [rd.AnimationEvent( "1", 0.55 )]
+    animation += [rd.AnimationEvent( "2", 0.55 )]
+    animation += [rd.AnimationEvent( "D", 0.55 )] * 2
+    animation += [rd.AnimationEvent( "2", 0.555 )]
+    animation += [rd.AnimationEvent( "2", 0.56 )]
+    animation += [rd.AnimationEvent( "2", 0.565 )]
+    animation += [rd.AnimationEvent( "2", 0.57 )]
+    animation += [rd.AnimationEvent( "2", 0.575 )]
+    animation += [rd.AnimationEvent( "2", 0.58 )]
+
+    animation += [rd.AnimationEvent( "$$", 0.61 )]
+    animation += [rd.AnimationEvent( "1", 0.615 )]
+    animation += [rd.AnimationEvent( "0", 0.615 )]
+
+    animation += [rd.AnimationEvent( "$CA3 activity patterns are shaped like the letters ABCD.\nThere are 8 repeats each of four patterns.", 0.62 )]
+    animation += [rd.AnimationEvent( "0", 0.63 )]
+    animation += [rd.AnimationEvent( "2", 0.63 )]
+    animation += [rd.AnimationEvent( "$Glu boutons respond sparsely and undergo depression.", 0.69 )]
+    animation += [rd.AnimationEvent( "$Glu boutons respond sparsely and undergo depression.\nAt pattern changes fresh boutons turn on strongly.", 0.97 )]
+
+    animation += [rd.AnimationEvent( "$  ", 1.2 )]
+    animation += [rd.AnimationEvent( "$$", 1.2 )]
+    animation += [rd.AnimationEvent( "2", 1.2 )]
+    animation += [rd.AnimationEvent( "0", 1.2 )]
+    animation += [rd.AnimationEvent( "4", 1.2 )]
+    for tt in np.arange( 1.2, 1.5, 0.001 ):
+        animation.append( rd.AnimationEvent( "r", tt ) )
+        animation.append( rd.AnimationEvent( "<", tt ) )
+
+
+
+    rdes.displayMoogli( 0.0005, runtime, rotation = 0.00, mergeDisplays=True, colormap = "plasma", animation = animation )
 
     moose.delete( "/model" )
     moose.delete( "/library" )
-    return (plot0, plotE, plotI, plotGE, plotGI, patternIdx, args.repeatIdx, args.seed)
+    return (plot0, args.freq, args.repeatIdx )
 
 def runSession( args, whichArg ):
     changedValue = 0
@@ -585,32 +661,19 @@ def runSession( args, whichArg ):
         changedValue = getattr(args, whichArg)
     fname = "{}_{}_{}.h5".format( Path( args.outputFile ).stem, whichArg, changedValue )
     print( "Working on: ", fname )
-    pool = multiprocessing.Pool( processes = args.numProcesses )
     ret = []
     data = []
     argdict = vars( args )
-    #for pattern in [46,47,48,49,50,52,53,55]:
-    for freq in [20, 30, 40, 50]:
-        updatePulseTrain( freq )
-    #for pattern in [52]:
-        argdict["pattern"] = 46
-        argdict["freq"] = freq
+    for freq in [50]:
+        ReducedPulseIdx = updatePulseTrain( freq )
         for ii in range( args.numRepeats ):
             argdict["repeatIdx"] = ii
-            #argdict["seed"] = args.seed + argdict["pattern"] * args.numRepeats + ii
+            argdict["freq"] = freq
+            argdict["seedConnections"] = args.seedConnections
+            argdict["seedStochastic"] = args.seedStochastic
             print( "Launching {}.{}".format( freq, ii ) )
             innerArgs = argparse.Namespace( **argdict )
-            #ret.append( pool.apply_async( innerMain, args = (innerArgs, )))
-            plot0, plotE, plotI, plotGE, plotGI, patternIdx, repeatIdx, seed = innerMain( innerArgs )
-            data.append( makeRow( patternIdx, repeatIdx, 1000*plot0, 1e12*plotE, 1e12*plotI, 1e12*plotGE, 1e12*plotGI, args ) )
-    '''
-    for rr in ret:
-        (plot0, patternIdx, repeatIdx, seed) = rr.get()
-        data.append( makeRow( patternIdx, repeatIdx, plot0, args ) )
-    '''
-    df = pandas.DataFrame(data, columns=pandasColumnNames + [str(i) for i in range( NUM_SAMPLES *6 ) ] )
-    #df.to_hdf( args.outputFile, "SimData", mode = "w", format='table', complevel=9)
-    df.to_hdf( fname, "SimData", mode = "w", complevel=9)
+            innerMain( innerArgs, ReducedPulseIdx )
 
 def main():
     global freq
@@ -629,22 +692,21 @@ def main():
     parser.add_argument( '-v', '--voltage_clamp', action="store_true", help ='Flag: when set, do voltage clamp for glu and GABA currents respectively.')
     parser.add_argument( '-d', '--deterministic', action="store_true", help ='Flag: when set, use deterministic ODE solver. Normally uses GSSA stochastic solver.')
     parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn86.g" )
-    parser.add_argument( "-s", "--seed", type = int, help = "Optional: Seed to use for random numbers both for Python and for MOOSE.", default = 1234 )
+    parser.add_argument( "-sc", "--seedConnections", type = int, help = "Optional: Seed to use for random numbers for setting up connections in Python.", default = 1234 )
+    parser.add_argument( "-ss", "--seedStochastic", type = int, help = "Optional: Seed to use for random numbers for MOOSE stochastic calculations.", default = 1234 )
     parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=1", default = 1.0 )
-    parser.add_argument( "-wglu", "--wtGlu", type = float, help = "Optional: weight scaling factor for Glu synapses. Default=0.5", default = 0.5 )
+    parser.add_argument( "-wglu", "--wtGlu", type = float, help = "Optional: weight scaling factor for Glu synapses. Default=2", default = 2 )
     parser.add_argument( "-vGABA", "--volGABA", type = float, help = "Optional: Volume scaling factor for GABA synapses. Default=0.5", default = 0.5 )
-    parser.add_argument( "-wGABA", "--wtGABA", type = float, help = "Optional: Weight of GABA synapses. Default=160", default = 4 )
-    parser.add_argument( "--pInter_CA1", type = float, help = "Optional: Probability of a given Interneuron connecting to the CA1 cell. Default=0.01 ", default = 0.01 )
+    parser.add_argument( "-wGABA", "--wtGABA", type = float, help = "Optional: Weight of GABA synapses. Default=50", default = 50 )
+    parser.add_argument( "--pInter_CA1", type = float, help = "Optional: Probability of a given Interneuron connecting to the CA1 cell. Default=0.004 ", default = 0.004 )
     parser.add_argument( "--pCA3_CA1", type = float, help = "Optional: Probability of a given CA3 cell connecting to the CA1 cell. Default=0.02 ", default = 0.02 )
-    parser.add_argument( "--pCA3_Inter", type = float, help = "Optional: Probability of a given CA3 cell connecting to an interneuron. Default=0.01 ", default = 0.01 )
-    parser.add_argument( "--ChR2_ampl", type = float, help = "Optional: Scale factor for ChR2 stimulus amplitude. Default=1.0", default = 1.0 )
-    parser.add_argument( "-z", "--zeroIndices", type = int, help = "Optional: Number of optical inputs to zero out, range 0 to 256. Default=192.", default = 192 )
+    parser.add_argument( "--pCA3_Inter", type = float, help = "Optional: Probability of a given CA3 cell connecting to an interneuron. Default=0.005 ", default = 0.005 )
+    parser.add_argument( "--ChR2_ampl", type = float, help = "Optional: Scale factor for ChR2 stimulus amplitude. Default=0.1.", default = 0.1 )
+    parser.add_argument( "-z", "--zeroIndices", type = int, help = "Optional: Number of optical inputs to zero out, range 0 to 256. Default=128.", default = 128 )
 
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
-    args.deterministic = True
     runSession( args, "orig" )
-
     
 if __name__ == "__main__":
     main()
