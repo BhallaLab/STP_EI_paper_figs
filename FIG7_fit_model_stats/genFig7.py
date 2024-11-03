@@ -481,6 +481,10 @@ def stimFunc( patternIdx, ChR2AmplScale ):
     idx2 = int( round( (t - GABAdelay) / chemDt ) )
     if idx2 >= len( ReducedPulseIdx ):
         return
+    if idx2 > stimWidthIdx:
+        chr2Ampl2 = max(FracChR2active[idx2-stimWidthIdx:idx2]) * ChR2AmplScale
+    else:
+        chr2Ampl2 = FracChR2active[idx2] * ChR2AmplScale
     InterIsActive = ( sum( ReducedPulseIdx[idx2-stimWidthIdx:idx2] ) > 0.5 )
     #InterIsActive = ( ReducedPulseIdx[idx2] > 0.5 )
     gluInput = moose.vec( "/model/chem/glu/Ca_ext" )
@@ -490,6 +494,8 @@ def stimFunc( patternIdx, ChR2AmplScale ):
         inputPattern = patternDict2[patternIdx]
         ca3cells = moose.vec( "/model/elec/CA3/soma" )
         pd = patternDict2[patternIdx]
+        amplIdx = min( len( pd ), int( chr2Ampl * len( pd ) ) )
+        pd =  np.append( pd[:amplIdx], np.zeros( len(pd)-amplIdx ) )
         ca3cells.Vm = pd
         '''
         #ca3cells.Vm = np.where( np.random.rand(len(pd)) < chr2Ampl, pd, 0 )
@@ -507,15 +513,15 @@ def stimFunc( patternIdx, ChR2AmplScale ):
 
     if InterIsActive:
         pd = patternDict2[patternIdx]
-        amplIdx = min( len( pd ), int( chr2Ampl * len( pd ) ) )
+        amplIdx = min( len( pd ), int( chr2Ampl2 * len( pd ) ) )
         #pd = np.where( np.random.rand( len( pd ) ) < chr2Ampl, pd, 0 )
-        #pd =  np.append( pd[:amplIdx], np.zeros( len(pd)-amplIdx ) )
+        pd =  np.append( pd[:amplIdx], np.zeros( len(pd)-amplIdx ) )
 
         Inter = moose.vec( "/model/elec/Inter/soma" )
         Inter.Vm = (np.matmul( CA3_Inter, pd) >= thresh_CA3_Inter ) * 1.0
         gabaInput.concInit = (np.matmul( Inter_CA1, Inter.Vm ) >= thresh_Inter_CA1 ) * stimAmpl
         if patternIdx == 46:
-            print( "{}  NUMGABA={:.1f}    chr2Ampl={:.3f}".format( patternIdx, sum( gabaInput.concInit) / stimAmpl, chr2Ampl ), flush=True )
+            print( "{}  NUMGABA={:.1f}    chr2Ampl={:.3f}".format( patternIdx, sum( gabaInput.concInit) / stimAmpl, chr2Ampl2 ), flush=True )
     else:
         gabaInput.concInit = basalCa
         moose.vec( "/model/elec/Inter/soma" ).Vm = 0
@@ -625,13 +631,13 @@ def main():
     parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn86.g" )
     parser.add_argument( "-s", "--seed", type = int, help = "Optional: Seed to use for random numbers both for Python and for MOOSE.", default = 1234 )
     parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=1", default = 1.0 )
-    parser.add_argument( "-wglu", "--wtGlu", type = float, help = "Optional: weight scaling factor for Glu synapses. Default=0.5", default = 0.5 )
+    parser.add_argument( "-wglu", "--wtGlu", type = float, help = "Optional: weight scaling factor for Glu synapses. Default=2.0", default = 2.0 )
     parser.add_argument( "-vGABA", "--volGABA", type = float, help = "Optional: Volume scaling factor for GABA synapses. Default=0.5", default = 0.5 )
-    parser.add_argument( "-wGABA", "--wtGABA", type = float, help = "Optional: Weight of GABA synapses. Default=4", default = 4 )
+    parser.add_argument( "-wGABA", "--wtGABA", type = float, help = "Optional: Weight of GABA synapses. Default=20", default = 20 )
     parser.add_argument( "--pInter_CA1", type = float, help = "Optional: Probability of a given Interneuron connecting to the CA1 cell. Default=0.01 ", default = 0.01 )
     parser.add_argument( "--pCA3_CA1", type = float, help = "Optional: Probability of a given CA3 cell connecting to the CA1 cell. Default=0.02 ", default = 0.02 )
     parser.add_argument( "--pCA3_Inter", type = float, help = "Optional: Probability of a given CA3 cell connecting to an interneuron. Default=0.01 ", default = 0.01 )
-    parser.add_argument( "--ChR2_ampl", type = float, help = "Optional: Scale factor for ChR2 stimulus amplitude. Default=1.0", default = 1.0 )
+    parser.add_argument( "--ChR2_ampl", type = float, help = "Optional: Scale factor for ChR2 stimulus amplitude. Default=0.1", default = 0.1 )
     parser.add_argument( "-z", "--zeroIndices", type = int, help = "Optional: Number of optical inputs to zero out, range 0 to 256. Default=192.", default = 192 )
 
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
@@ -639,12 +645,12 @@ def main():
     runSession( args, "orig" )
 
     orig = args.wtGlu
-    for args.wtGlu in [0.2, 1.0]:
+    for args.wtGlu in [1.0, 5.0]:
         runSession( args, "wtGlu" )
     args.wtGlu = orig
 
     orig = args.wtGABA
-    for args.wtGABA in [2, 10]:
+    for args.wtGABA in [10, 50]:
         runSession( args, "wtGABA" )
     args.wtGABA = orig
 
@@ -668,12 +674,10 @@ def main():
         runSession( args, "zeroIndices" )
     args.zeroIndices = orig
 
-    '''
     orig = args.ChR2_ampl
-    for args.ChR2_ampl in [0.5, 2.0]:
+    for args.ChR2_ampl in [0.05, 0.2]:
         runSession( args, "ChR2_ampl" )
     args.ChR2_ampl = orig
-    '''
 
     args.modelName = "BothPresyn87.g"
     runSession( args, "modelName" )

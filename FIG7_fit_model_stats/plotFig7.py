@@ -4,6 +4,7 @@ import numpy as np
 import argparse
 import math
 from scipy.stats import linregress
+from scipy.stats import kstest
 
 import matplotlib.pyplot as plt
 
@@ -41,8 +42,9 @@ repeatPatterns = False
 inputs = []
 stimList = []
 pulseTrig = []
-#patternData = "../../../2022/VC_DATA/all_cells_SpikeTrain_CC_long.h5"
-#patternData = "simData_1.0_0.0002_0.0008.h5"
+exptFile = "../../../2022/VC_DATA/all_cells_SpikeTrain_CC_long.h5"
+#simFile = "SIMDATA47/simData_orig_0.h5"
+simFile = "SIMDATA49/simData_wtGABA_10.h5"
 SAMPLE_FREQ = 20000
 chemDt = 0.0005
 SAMPLE_TIME = 11
@@ -87,13 +89,17 @@ def dualAlphaFunc( t, t1, t2 ):
         return alphaFunc( t, t1 )
     return (1.0/(t1-t2)) * (np.exp(-t/t1) - np.exp(-t/t2))
 
-def findPeaks( pkDelay, Vm, width = 0.002 ):
+def findPeaks( pkDelay, Vm, width = 0.002, threshold = 0.0 ):
     widthSamples = int( np.round( width * SAMPLE_FREQ ) )
     half = widthSamples // 2
     pks = []
     for idx in PulseTrain:
         idx2 = idx + pkDelay - widthSamples
-        pks.append(np.median( Vm[idx2:idx2 + widthSamples*2] ))
+        vv = np.median( Vm[idx2:idx2 + widthSamples*2] )
+        if vv > threshold:
+            pks.append( vv )
+        else:
+            pks.append( 0 )
     return pks
 
 def findMinima( pkDelay, Vm, width = 0.002 ):
@@ -138,19 +144,21 @@ def fftFilter( data ):
     '''
     return np.array(data - filtered_data)
 
-def parseRow( df, cell ):
+def parseRow( df, cell, args ):
     # Finds the field and epsp peaks for each pulse.
     # If any are too small, it puts in a zero.
     alphaTab, alphaDelay, pkDelay, alphaTau1, alphaTau2 = setFittingParams( cell )
     longAlpha = np.zeros(NUM_SAMPLES)
     longAlpha[:ALPHAWINDOW] += alphaTab
     epsp = np.array(df.iloc[0, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ])
+    epsp += np.random.normal(0.0, args.noise*1e-3, epsp.shape )
     if cell == 0:
         epsp *= 1000     # Scale to mV.
-    baseline = min( np.percentile(epsp, 25 ), 0.0 )
+        args.threshold = 0.2 # Assign for sim.
+    baseline = min( np.percentile(epsp, 25 ), np.mean( epsp[100:1000 ]) )
     epsp -= baseline # hack to handle traces with large ipsps.
     tepsp = np.linspace( 0, 11, len(epsp) )
-    pks = findPeaks( pkDelay, epsp )
+    pks = findPeaks( pkDelay, epsp, threshold=args.threshold )
 
     if cell == 4041:
         field = np.array(df.iloc[0, SAMPLE_START + 3*NUM_SAMPLES:SAMPLE_START+4*NUM_SAMPLES ] )
@@ -202,7 +210,9 @@ def panelC_probVsTime( ax, column, pk5, pk15 ):
     ax.set_ylabel( "Probability (%)" )
     ax.set_ylim( -5, 105 )
     label = chr( ord("C") + column )
-    ax.text( -0.20, 1.05, label, fontsize = 22, weight="bold", transform=ax.transAxes )
+    ax.text( -0.20, 1.06, label, fontsize = 22, weight="bold", transform=ax.transAxes )
+    subtitle = "Experiment" if column == 0 else "Model"
+    ax.text( 0.20, 1.06, subtitle, fontsize = 16, transform=ax.transAxes )
 
 def panelE_epspVsTime( ax, column, pk5, pk15 ):
     pk5 = np.array( pk5 )
@@ -251,8 +261,9 @@ def panelI_epkHisto( ax, column, pk5, pk15 ):
     ax.set_ylabel( "#" )
     label = chr( ord("I") + column )
     ax.text( -0.20, 1.05, label, fontsize = 22, weight = "bold", transform=ax.transAxes )
+    return [pk5, pk15]
 
-def panelA_SampleTrace( ax, dcell, column ):
+def panelA_SampleTrace( ax, dcell, column, args ):
     ipat = dcell["patternList"].astype(int)
     #df = dcell.loc[(ipat == 46) & (dcell['sweep'] == 12)]
     df = dcell.loc[(ipat == 46)]
@@ -267,16 +278,18 @@ def panelA_SampleTrace( ax, dcell, column ):
     if pulseThresh < MINIMUM_PULSE_THRESH:
         return [], [], 0
     epsp = np.array(df.iloc[0, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ])
+    epsp += np.random.normal(0.0, args.noise*1e-3, epsp.shape )
     if cell == 0:
         epsp *= 1000
     else:
         pulseTrig *= 100
     field = np.array(df.iloc[0, SAMPLE_START + 3*NUM_SAMPLES:SAMPLE_START+4*NUM_SAMPLES ] )
 
-    baseline = min( np.percentile(epsp, 25 ), 0.0 )
+    #baseline = min( np.percentile(epsp, 25 ), 0.0 )
+    baseline = min( np.percentile(epsp, 25 ), np.mean( epsp[100:1000 ]) )
     epsp -= baseline # hack to handle traces with large ipsps.
     tepsp = np.linspace( 0, 11, len(epsp) )
-    pks = findPeaks( pkDelay, epsp )
+    pks = findPeaks( pkDelay, epsp, threshold=args.threshold )
     fitEPSP = np.zeros( len( epsp ) + ALPHAWINDOW * 2 )
     lastPP = 0.0
     lastIdx = 0
@@ -319,7 +332,7 @@ def panelA_SampleTrace( ax, dcell, column ):
     ax.text( -0.10, 1.05, label, fontsize = 22, weight = "bold", transform=ax.transAxes )
     #ax.set_xlabel("Time (s)")
 
-def scanData( df ):
+def scanData( df, args ):
     idx = 0
     cellStats = {}
     cellList = df['cellID'].unique()
@@ -346,7 +359,7 @@ def scanData( df ):
                     print( "{}, cell{}, pat{}, sweep{}, seq{}".format( 
                         idx, cell, pp, ss, seq ) )
                     idx += 1
-                    fpks, epks = parseRow( dseq, cell )
+                    fpks, epks = parseRow( dseq, cell, args )
                     #print( "SUM = ", sum( foundIdx ) )
                     patDict[pp].append( [fpks, epks] )
                     if pp in [46,47,48,49,50]:
@@ -369,6 +382,7 @@ def panelK_varianceHisto( ax, column, patDict ):
             evar = np.std( ee, axis = 0 )
             totevar.extend( evar )
     ax.hist( totevar, bins = 20, alpha = 0.5, label = "5 sq", histtype = "step", linewidth = 2, edgecolor = "blue" )
+    totevar5 = totevar
 
     totevar = []
     for pattern in [52, 53, 55]:
@@ -384,6 +398,7 @@ def panelK_varianceHisto( ax, column, patDict ):
     ax.set_ylabel( "#" )
     label = chr( ord( "K" ) + column )
     ax.text( -0.20, 1.05, label, fontsize = 22, weight = "bold", transform=ax.transAxes )
+    return [totevar5, totevar]
 
 def setFittingParams( cell ):
     alphaTau1 = 0.005 * SAMPLE_FREQ
@@ -395,10 +410,10 @@ def setFittingParams( cell ):
         alphaDelay = int( 0.005 * SAMPLE_FREQ )
         pkDelay = int( 0.015 * SAMPLE_FREQ )
     elif cell == 0: # Simulated
-        alphaTau1 = 0.010 * SAMPLE_FREQ
-        alphaTau2 = 0.040 * SAMPLE_FREQ
-        alphaDelay = int( 0.004 * SAMPLE_FREQ )
-        pkDelay = int( 0.023 * SAMPLE_FREQ )
+        alphaTau1 = 0.004 * SAMPLE_FREQ
+        alphaTau2 = 0.008 * SAMPLE_FREQ
+        alphaDelay = int( 0.002 * SAMPLE_FREQ )
+        pkDelay = int( 0.008 * SAMPLE_FREQ )
     else: # Use defaults from above
         pass
 
@@ -408,18 +423,28 @@ def setFittingParams( cell ):
 
 def main():
     parser = argparse.ArgumentParser( description = "Read and plot sim data" )
-    parser.add_argument( "fname", type = str, help = "Required: Name of hdf5 pandas file with data.")
-    parser.add_argument( "-f2", "--fname2", type = str, help = "Optional: Name of another hdf5 pandas file with data." )
+    parser.add_argument( "--fname", type = str, help = "Required: Name of hdf5 pandas file with data.", default = exptFile )
+    parser.add_argument( "-f2", "--fname2", type = str, help = "Optional: Name of another hdf5 pandas file with data.", default = simFile )
+    parser.add_argument( "-n", "--noise", type = float, help = "Optional: Noise to add to EPSP trace, in mV. Default = 0.", default = 0 )
+    parser.add_argument( "-t", "--threshold", type = float, help = "Optional: Threshold for classifying an EPSP trace as an event. In mV. Default = 0.", default = 0 )
     args = parser.parse_args()
     df = pandas.read_hdf( args.fname )
     plt.rcParams.update( {"font.size": 20} )
     fig = plt.figure( figsize = (10,24) )
     gs = fig.add_gridspec( 7, 2 ) # 7 rows, 2 cols
-    plotFrame( gs, fig, args, df, 0, 0 )
+    ehisto, vhisto = plotFrame( gs, fig, args, df, 0, 0 )
     if args.fname2:
         df2 = pandas.read_hdf( args.fname2 )
         # Here we check if it is real or synth data
-        plotFrame( gs, fig, args, df2, 1, 0 )
+        eh2, vh2 = plotFrame( gs, fig, args, df2, 1, 0 )
+
+        stat5, pval5 = kstest( ehisto[0], eh2[0] )
+        stat15, pval15 = kstest( ehisto[1], eh2[1] )
+        print ( "KS Tests: EPSPs. 5 Sq Stat = {:.3f}, pval = {:.4f}, 15Sq: {:.3f}, {:.4f}".format( stat5, pval5, stat15, pval15 ) )
+
+        stat5, pval5 = kstest( vhisto[0], vh2[0] )
+        stat15, pval15 = kstest( vhisto[1], vh2[1] )
+        print ( "KS Tests: EPSPVars. 5sq: Stat = {:.3f}, pval = {:.4f}, 15Sq: {:.3f}, {:.4f}".format( stat5, pval5, stat15, pval15 ) )
     fig.tight_layout()
     plt.show()
 
@@ -430,10 +455,11 @@ def plotFrame(gs, fig, args, df, column = 0, cell = 0):
 
     # Set up the stimulus timings
     ax = fig.add_subplot( gs[column,:] ) # Hack: col 0 comes in row 0, col 1 in row 2
-    panelA_SampleTrace( ax, df, column )
+    panelA_SampleTrace( ax, df, column, args )
     #dcell4041 = df.loc[df["cellID"] == 4041]
-    pk5, pk15, fpk5, fpk15, patDict = scanData( df )
+    pk5, pk15, fpk5, fpk15, patDict = scanData( df, args )
     print( "LENGTHS = ", len( pk5 ), len( pk15 ), len( fpk5 ), len( fpk15 ) )
+    subtitle = "Experiment" if column == 0 else "Model"
     panelC_probVsTime( fig.add_subplot(gs[2,column]), column, pk5, pk15 )
     panelE_epspVsTime( fig.add_subplot(gs[3,column]), column, pk5, pk15 )
     #panelD_fepspVsISI(  fig.add_subplot(gs[2,0]), fpk5, fpk15 )
@@ -441,8 +467,9 @@ def plotFrame(gs, fig, args, df, column = 0, cell = 0):
     #panelFG_epspVsField( fig.add_subplot(gs[3,0]), fpk5, "F" )
     #panelFG_epspVsField( fig.add_subplot(gs[3,1]), fpk15, "G" )
     #panelH_fpkHisto( fig.add_subplot(gs[4,0]), fpk5, fpk15 )
-    panelI_epkHisto( fig.add_subplot(gs[5,column]), column, pk5, pk15 )
-    panelK_varianceHisto( fig.add_subplot(gs[6,column]), column, patDict )
+    ehisto = panelI_epkHisto( fig.add_subplot(gs[5,column]), column, pk5, pk15 )
+    vhisto = panelK_varianceHisto( fig.add_subplot(gs[6,column]), column, patDict )
+    return ehisto, vhisto
     
 
 if __name__ == "__main__":
