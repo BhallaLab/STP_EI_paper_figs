@@ -5,6 +5,7 @@ import argparse
 import math
 from scipy.stats import linregress
 from scipy.stats import kstest
+import scipy.signal as signal
 
 import matplotlib.pyplot as plt
 
@@ -144,6 +145,22 @@ def fftFilter( data ):
     '''
     return np.array(data - filtered_data)
 
+def addGaussianNoise( data, noiseAmpl, bandwidth, samplingFreq ):
+    # Generate white Gaussian noise
+    noise = np.random.randn(len(data))
+    # Design a low-pass filter
+    nyquistFreq = 0.5 * samplingFreq
+    cutoffFreq = bandwidth / nyquistFreq
+    b, a = signal.butter(4, cutoffFreq, 'lowpass')
+    # Filter the noise
+    filtered_noise = signal.filtfilt(b, a, noise)
+    # Scale the noise
+    scaled_noise = filtered_noise * noiseAmpl
+    # Add noise to the signal
+    noisy_signal = data + scaled_noise
+
+    return noisy_signal
+
 def parseRow( df, cell, args ):
     # Finds the field and epsp peaks for each pulse.
     # If any are too small, it puts in a zero.
@@ -151,10 +168,10 @@ def parseRow( df, cell, args ):
     longAlpha = np.zeros(NUM_SAMPLES)
     longAlpha[:ALPHAWINDOW] += alphaTab
     epsp = np.array(df.iloc[0, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ])
-    epsp += np.random.normal(0.0, args.noise*1e-3, epsp.shape )
+    #epsp += np.random.normal(0.0, args.noise*1e-3, epsp.shape )
+    epsp = addGaussianNoise( epsp, args.noise*1e-3, args.noiseFreq, 20000 )
     if cell == 0:
         epsp *= 1000     # Scale to mV.
-        args.threshold = 0.2 # Assign for sim.
     baseline = min( np.percentile(epsp, 25 ), np.mean( epsp[100:1000 ]) )
     epsp -= baseline # hack to handle traces with large ipsps.
     tepsp = np.linspace( 0, 11, len(epsp) )
@@ -278,7 +295,8 @@ def panelA_SampleTrace( ax, dcell, column, args ):
     if pulseThresh < MINIMUM_PULSE_THRESH:
         return [], [], 0
     epsp = np.array(df.iloc[0, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ])
-    epsp += np.random.normal(0.0, args.noise*1e-3, epsp.shape )
+    #epsp += np.random.normal(0.0, args.noise*1e-3, epsp.shape )
+    epsp = addGaussianNoise( epsp, args.noise*1e-3, args.noiseFreq, 20000 )
     if cell == 0:
         epsp *= 1000
     else:
@@ -289,7 +307,7 @@ def panelA_SampleTrace( ax, dcell, column, args ):
     baseline = min( np.percentile(epsp, 25 ), np.mean( epsp[100:1000 ]) )
     epsp -= baseline # hack to handle traces with large ipsps.
     tepsp = np.linspace( 0, 11, len(epsp) )
-    pks = findPeaks( pkDelay, epsp, threshold=args.threshold )
+    pks = findPeaks( pkDelay, epsp, threshold=args.threshold*1e-3 )
     fitEPSP = np.zeros( len( epsp ) + ALPHAWINDOW * 2 )
     lastPP = 0.0
     lastIdx = 0
@@ -410,8 +428,8 @@ def setFittingParams( cell ):
         alphaDelay = int( 0.005 * SAMPLE_FREQ )
         pkDelay = int( 0.015 * SAMPLE_FREQ )
     elif cell == 0: # Simulated
-        alphaTau1 = 0.004 * SAMPLE_FREQ
-        alphaTau2 = 0.008 * SAMPLE_FREQ
+        alphaTau1 = 0.008 * SAMPLE_FREQ
+        alphaTau2 = 0.016 * SAMPLE_FREQ
         alphaDelay = int( 0.002 * SAMPLE_FREQ )
         pkDelay = int( 0.008 * SAMPLE_FREQ )
     else: # Use defaults from above
@@ -425,8 +443,9 @@ def main():
     parser = argparse.ArgumentParser( description = "Read and plot sim data" )
     parser.add_argument( "--fname", type = str, help = "Required: Name of hdf5 pandas file with data.", default = exptFile )
     parser.add_argument( "-f2", "--fname2", type = str, help = "Optional: Name of another hdf5 pandas file with data.", default = simFile )
-    parser.add_argument( "-n", "--noise", type = float, help = "Optional: Noise to add to EPSP trace, in mV. Default = 0.", default = 0 )
-    parser.add_argument( "-t", "--threshold", type = float, help = "Optional: Threshold for classifying an EPSP trace as an event. In mV. Default = 0.", default = 0 )
+    parser.add_argument( "-n", "--noise", type = float, help = "Optional: Noise to add to EPSP trace, in mV. Default = 1.", default = 1 )
+    parser.add_argument( "-freq", "--noiseFreq", type = float, help = "Optional: Bandwidth of noise to add to EPSP trace, in Hz. Default = 200.", default = 200 )
+    parser.add_argument( "-t", "--threshold", type = float, help = "Optional: Threshold for classifying an EPSP trace as an event. In mV. Default = 0.5.", default = 0 )
     args = parser.parse_args()
     df = pandas.read_hdf( args.fname )
     plt.rcParams.update( {"font.size": 20} )
