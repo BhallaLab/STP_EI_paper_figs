@@ -630,7 +630,6 @@ def main():
     parser.add_argument( "-sc", "--seedConnections", type = int, help = "Optional: Seed to use for random numbers for setting up connections in Python.", default = 1234 )
     parser.add_argument( "-ss", "--seedStochastic", type = int, help = "Optional: Seed to use for random numbers for MOOSE stochastic calculations.", default = 1234 )
     parser.add_argument( "--synDiaRange", type = float, help = "Optional: Stdev of synaptic diameter. Default=0.5", default = 0.5 )
-    parser.add_argument( "-wglu", "--wtGlu", type = float, help = "Optional: weight scaling factor for Glu synapses. Default=0.5", default = 0.5 )
     parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=1", default = 1.0 )
     parser.add_argument( "-wglu", "--wtGlu", type = float, help = "Optional: weight scaling factor for Glu synapses. Default=0.5", default = 0.5 )
     parser.add_argument( "-vGABA", "--volGABA", type = float, help = "Optional: Volume scaling factor for GABA synapses. Default=0.5", default = 0.5 )
