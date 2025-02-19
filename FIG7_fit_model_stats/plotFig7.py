@@ -3,9 +3,10 @@ import pylab
 import numpy as np
 import argparse
 import math
-from scipy.stats import linregress
-from scipy.stats import kstest
+import scipy.stats as stats
 import scipy.signal as signal
+import scipy.optimize as optimize
+import statsmodels.api as sm
 
 import matplotlib.pyplot as plt
 
@@ -43,16 +44,16 @@ repeatPatterns = False
 inputs = []
 stimList = []
 pulseTrig = []
-exptFile = "../../../2022/VC_DATA/all_cells_SpikeTrain_CC_long.h5"
-#simFile = "SIMDATA47/simData_orig_0.h5"
-simFile = "SIMDATA49/simData_wtGABA_10.h5"
+exptData = "../../../2022/VC_DATA/all_cells_SpikeTrain_CC_long.h5"
+simData = "SIMDATA52/simData_orig_0.h5"
+#patternData = "simData_1.0_0.0002_0.0008.h5"
 SAMPLE_FREQ = 20000
 chemDt = 0.0005
 SAMPLE_TIME = 11
 NUM_SAMPLES = SAMPLE_FREQ * SAMPLE_TIME
 SAMPLE_START = 49
 SWEEP = 16
-EPSPTHRESH = 0.0004 # Threshold for a distinct EPSP pk. In Volts
+EPSPTHRESH = 0.4 # Threshold for a distinct EPSP pk. In mV
 '''
 PKDELAY = int( 0.020 * SAMPLE_FREQ )
 ALPHATAU1 = 0.005 * SAMPLE_FREQ
@@ -175,7 +176,7 @@ def parseRow( df, cell, args ):
     baseline = min( np.percentile(epsp, 25 ), np.mean( epsp[100:1000 ]) )
     epsp -= baseline # hack to handle traces with large ipsps.
     tepsp = np.linspace( 0, 11, len(epsp) )
-    pks = findPeaks( pkDelay, epsp, threshold=args.threshold )
+    pks = findPeaks( pkDelay, epsp, threshold=args.threshold*1e-3 )
 
     if cell == 4041:
         field = np.array(df.iloc[0, SAMPLE_START + 3*NUM_SAMPLES:SAMPLE_START+4*NUM_SAMPLES ] )
@@ -227,13 +228,12 @@ def panelC_probVsTime( ax, column, pk5, pk15 ):
     ax.set_ylabel( "Probability (%)" )
     ax.set_ylim( -5, 105 )
     label = chr( ord("C") + column )
-    ax.text( -0.20, 1.06, label, fontsize = 22, weight="bold", transform=ax.transAxes )
-    subtitle = "Experiment" if column == 0 else "Model"
-    ax.text( 0.20, 1.06, subtitle, fontsize = 16, transform=ax.transAxes )
+    ax.text( -0.20, 1.05, label, fontsize = 22, weight="bold", transform=ax.transAxes )
 
 def panelE_epspVsTime( ax, column, pk5, pk15 ):
     pk5 = np.array( pk5 )
     pk15 = np.array( pk15 )
+    print( "SHAPE = ", pk5.shape, pk15.shape )
     mean5 = np.mean( pk5, axis = 0 )
     mean15 = np.mean( pk15, axis = 0 )
     ax.scatter( PulseTrain / SAMPLE_FREQ, mean5, color="blue", s=10, label = "5 Sq" )
@@ -249,6 +249,7 @@ def panelE_epspVsTime( ax, column, pk5, pk15 ):
 def panelG_epspVsISI( ax, column, pk5, pk15 ):
     pk5 = np.array( pk5 )
     pk15 = np.array( pk15 )
+    print( "SHAPE = ", pk5.shape, pk15.shape )
     mean5 = np.mean( pk5, axis = 0 )
     mean15 = np.mean( pk15, axis = 0 )
     padt = np.pad( PulseTrain, 1)
@@ -278,7 +279,58 @@ def panelI_epkHisto( ax, column, pk5, pk15 ):
     ax.set_ylabel( "#" )
     label = chr( ord("I") + column )
     ax.text( -0.20, 1.05, label, fontsize = 22, weight = "bold", transform=ax.transAxes )
-    return [pk5, pk15]
+
+def panelK_FFT( ax, dcell, column, args ):
+    MAX_FREQ = 60
+    ipat = dcell["patternList"].astype(int).unique()
+    recordings5 = []
+    recordings15 = []
+    for pp in ipat:
+        #df = dcell.loc[(ipat == 46) & (dcell['sweep'] == 12)]
+        df = dcell.loc[dcell["patternList"] == pp]
+        for i in range(len(df)):
+            row = df.iloc[[i]]  # Get a single-row DataFrame
+            cell = int(row['cellID'].iloc[0])
+            print( "FFT row {} for cell {} and pat {}".format( i, cell, pp ))
+            pulseTrig = np.array(row.iloc[0, SAMPLE_START + 2*NUM_SAMPLES:SAMPLE_START+3*NUM_SAMPLES ] )
+            pulseThresh = ( min( pulseTrig ) + max( pulseTrig ) ) / 2.0
+            if pulseThresh < MINIMUM_PULSE_THRESH:
+                continue
+            epsp = np.array(row.iloc[0, SAMPLE_START:SAMPLE_START+NUM_SAMPLES ])
+            if cell == 0:
+                epsp *= 1000
+            if pp < 51:
+                recordings5.append( epsp )
+            else:
+                recordings15.append( epsp )
+    # Calculate PSD for each recording
+    psd_list5 = []
+    for voltage in recordings5:
+        frequencies, psd = signal.welch(voltage, fs=SAMPLE_FREQ, nperseg=65536)
+        freq_idx = np.where(frequencies <= MAX_FREQ)[0][-1]
+        psd_list5.append(np.abs(psd[:freq_idx+1])) #Store PSD up to MAX_FREQ
+    average_psd5 = np.mean(psd_list5, axis=0)
+    ax.plot(frequencies[:freq_idx+1], average_psd5, color = "blue")
+
+    psd_list15 = []
+    for voltage in recordings15:
+        frequencies, psd = signal.welch(voltage, fs=SAMPLE_FREQ, nperseg=65536)
+        freq_idx = np.where(frequencies <= MAX_FREQ)[0][-1]  # Find index of 1 kHz
+        psd_list15.append(np.abs(psd[:freq_idx+1])) #Store PSD up to MAX_FREQ
+    average_psd15 = np.mean(psd_list15, axis=0)
+    ax.plot(frequencies[:freq_idx+1], average_psd15, color = "orange")
+    #print( "NUM RECORDINGS = ", len( recordings5 ), len( recordings15 ) )
+    #ax.plot(recordings[-1])
+    ax.set_xlabel('Frequency (Hz)')
+    ax.set_ylabel('PSD (V^2/Hz)')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    #ax.legend( loc = "upper right", ncol=3, frameon=False, fontsize = 14 )
+    #ax.set_xlim( 0, PLOTLEN )
+    #ax.set_ylim( -7, 10 )
+    label = chr( ord("K") + column )
+    ax.text( -0.10, 1.05, label, fontsize = 22, weight = "bold", transform=ax.transAxes )
+    return average_psd5.astype( float ), average_psd15.astype( float )
 
 def panelA_SampleTrace( ax, dcell, column, args ):
     ipat = dcell["patternList"].astype(int)
@@ -375,7 +427,7 @@ def scanData( df, args ):
                 for seq in seqList:
                     dseq = dsweep.loc[dsweep['exptSeq'] == seq]
                     print( "{}, cell{}, pat{}, sweep{}, seq{}".format( 
-                        idx, cell, pp, ss, seq ) )
+                        idx, cell, pp, ss, seq ), flush = True )
                     idx += 1
                     fpks, epks = parseRow( dseq, cell, args )
                     #print( "SUM = ", sum( foundIdx ) )
@@ -400,7 +452,6 @@ def panelK_varianceHisto( ax, column, patDict ):
             evar = np.std( ee, axis = 0 )
             totevar.extend( evar )
     ax.hist( totevar, bins = 20, alpha = 0.5, label = "5 sq", histtype = "step", linewidth = 2, edgecolor = "blue" )
-    totevar5 = totevar
 
     totevar = []
     for pattern in [52, 53, 55]:
@@ -416,7 +467,6 @@ def panelK_varianceHisto( ax, column, patDict ):
     ax.set_ylabel( "#" )
     label = chr( ord( "K" ) + column )
     ax.text( -0.20, 1.05, label, fontsize = 22, weight = "bold", transform=ax.transAxes )
-    return [totevar5, totevar]
 
 def setFittingParams( cell ):
     alphaTau1 = 0.005 * SAMPLE_FREQ
@@ -439,31 +489,204 @@ def setFittingParams( cell ):
     alphaTab = alphaTab / max( alphaTab )
     return alphaTab, alphaDelay, pkDelay, alphaTau1, alphaTau2
 
+
+def doLinFit( time, Y, name ):
+    """Fits a straight line to the data and returns parameter estimates,
+    error estimates, R-squared, and p-value.
+
+    Args:
+        x: The independent variable data (1D array).
+        y: The dependent variable data (1D array).
+    """
+    #Y2 = Y / Y.mean(axis=1, keepdims=True)
+    Y2 = Y
+    Y_all = Y2.flatten()  # Flatten the (75, 40) array to a single vector
+    numSamples = Y2.shape[0]
+    time_all = np.tile( time, numSamples )
+    try:
+        # Use statsmodels for linear regression (more stats info)
+        X = sm.add_constant(time_all)  # Add a constant for the intercept
+        model = sm.OLS(Y_all, X).fit()
+        slope = model.params[1]
+        intercept = model.params[0]
+        slope_err = model.bse[1]
+        intercept_err = model.bse[0]
+        r_squared = model.rsquared
+        resid_std = model.resid.std()
+        p_value = model.pvalues[1]  # p-value for the slope
+        fitted_y = model.fittedvalues
+        #print( "SHAPE: ", r_squared, p_value )
+
+        #Confidence Intervals
+        alpha = 0.05
+        n = len(Y_all)
+        p = 2 #Number of parameters
+        dof = n - p
+        t_critical = stats.t.ppf(1 - alpha/2, dof)
+        slope_ci = model.params[1] + np.array([-1, 1]) * t_critical * model.bse[1]
+        intercept_ci = model.params[0] + np.array([-1, 1]) * t_critical * model.bse[0]
+
+        print( "Linear Fitting: ", name )
+        #print("slope:", slope, ", slope_err: ", slope_err, ", Others: ", slope_ci[0], slope_ci[1])
+
+        print("slope: {:.3g}±{:.3g}  (95% CI: {:.3g}, {:.3g})".format(
+            slope, slope_err, float(slope_ci[0]), float(slope_ci[1])) )
+        print("intcpt: {:.3g}±{:.3g}  (95% CI: {:.3g}, {:.3g})".format( intercept, intercept_err, intercept_ci[0], intercept_ci[1]) )
+        print("r_sq: {:.3g}  p_value: {:.3g}    resid_std: {:.3g}".format( 
+            r_squared, p_value, resid_std ) )
+        #print("r_sq: {:.3g}  p_value: {:.3g}, fitted_y: {:.3g})".format(
+            #r_squared, p_value, fitted_y ) )
+        results = {
+            'slope': slope,
+            'intercept': intercept,
+            'slope_err': slope_err,
+            'intercept_err': intercept_err,
+            'slope_ci': slope_ci,
+            'intercept_ci': intercept_ci,
+            'r_squared': r_squared,
+            'p_value': p_value,
+            'fitted_y': fitted_y
+        }
+        return results
+
+    except Exception as e:  # Catch any potential errors
+        print(f"Error fitting line: {e}")
+        return None  # or raise the exception if you prefer
+
+
+def doExpFitISI( Y, name ):
+    padt = np.pad( PulseTrain, 1)
+    isi = (PulseTrain - padt[:len( PulseTrain )]) / SAMPLE_FREQ
+    n_samples = Y.shape[0]
+    n_timepoints = len( isi )
+    Y2 = Y / Y.mean(axis=1, keepdims=True)
+    Y2 = Y
+
+    # Reshape Y to a 1D array
+    Y_all = Y2.flatten()  # Flatten the (75, 40) array to a single vector
+    time_all = np.tile(isi, n_samples) #tile time so it matches the length of Y_all
+
+    # Exponential decay function
+    def exponential_decay(t, y0, tau, y1):
+        return y0 * np.exp(-t / tau) + y1
+
+    # Initial guesses (adjust these as needed)
+    y0_guess = np.max(Y_all) - np.min(Y_all)
+    tau_guess = 0.03
+    y1_guess = np.min(Y_all)
+
+    try:
+        popt, pcov = optimize.curve_fit(exponential_decay, time_all, Y_all, p0=[y0_guess, tau_guess, y1_guess], maxfev=5000)
+        y0, tau, y1 = popt
+        perr = np.sqrt(np.diag(pcov))  # Standard deviations of the params
+        alpha = 0.05  # Significance level (1 - confidence level)
+        n = len(Y_all)
+        p = len(popt)
+        dof = n - p  # Degrees of freedom
+        t_critical = stats.t.ppf(1 - alpha/2, dof) #t-critical value for 2-sided test
+        ci_lower = popt - t_critical * perr
+        ci_upper = popt + t_critical * perr
+
+        print( "Exp Fitting: ", name )
+        print("y0: {:.3g} ± {:.3g}  (95% CI: {:.3g}, {:.3g})".format( y0, perr[0], ci_lower[0], ci_upper[0]))
+
+        #print(f"y0: {y0} ± {perr[0]}  (95% CI: {ci_lower[0]}, {ci_upper[0]})")
+        print("tau: {:.3g} ± {:.3g}  (95% CI: {:.3g}, {:.3g})".format(
+            tau, perr[1], ci_lower[1], ci_upper[1]))
+
+
+        #print(f"tau: {tau} ± {perr[1]} (95% CI: {ci_lower[1]}, {ci_upper[1]})")
+        print("y1: {:.3g} ± {:.3g}  (95% CI: {:.3g}, {:.3g})".format(
+            y1, perr[2], ci_lower[2], ci_upper[2]))
+        #print(f"y1: {y1} ± {perr[2]} (95% CI: {ci_lower[2]}, {ci_upper[2]})")
+    
+
+        residuals = Y_all - exponential_decay(time_all, y0, tau, y1)
+        ss_res = np.sum(residuals**2)
+        ss_tot = np.sum((Y_all - np.mean(Y_all))**2)
+        r_squared = 1 - (ss_res / ss_tot)
+
+        #print(f"y0: {y0}")
+        #print(f"tau: {tau}")
+        #print(f"y1: {y1}")
+        print(f"R-squared: {r_squared}")
+
+        if hasattr(Y2, 'shape') and len(Y2.shape) == 2: # Check if Y is 2D (has replicates)
+            n_replicates = Y2.shape[0]
+            n_timepoints = Y2.shape[1]
+            n_total = n_replicates * n_timepoints
+        
+            # Calculate pure error sum of squares (variation within replicates)
+            ss_pure_error = 0
+            for t_idx in range(n_timepoints):
+                y_at_t = Y2[:, t_idx] #All the replicates at a specific timepoint
+                ss_pure_error += np.sum((y_at_t - np.mean(y_at_t))**2)
+
+            df_pure_error = n_total - n_timepoints
+            df_residual = n_total - len(popt) #n_total - number of fitted parameters
+            ms_residual = ss_res / df_residual
+            ms_pure_error = ss_pure_error / df_pure_error
+
+            f_statistic = ms_residual / ms_pure_error  # F-statistic
+            p_value = 1 - stats.f.cdf(f_statistic, df_residual, df_pure_error)  # Use scipy.stats.f.cd
+
+            print(f"Lack-of-fit F-statistic: {f_statistic}")
+            print(f"Lack-of-fit p-value: {p_value}")
+        else:
+            print("Lack-of-fit test requires replicated data. Skipping.")
+        print( flush = True )
+
+    except RuntimeError as e:
+        print(f"Fit failed: {e}")
+
+
+
+
+
 def main():
     parser = argparse.ArgumentParser( description = "Read and plot sim data" )
-    parser.add_argument( "--fname", type = str, help = "Required: Name of hdf5 pandas file with data.", default = exptFile )
-    parser.add_argument( "-f2", "--fname2", type = str, help = "Optional: Name of another hdf5 pandas file with data.", default = simFile )
+    parser.add_argument( "-f", "--fname", type = str, help = "Optional: Name of hdf5 pandas file with data.", default = exptData )
+    parser.add_argument( "-f2", "--fname2", type = str, help = "Optional: Name of another hdf5 pandas file with data.", default = simData )
     parser.add_argument( "-n", "--noise", type = float, help = "Optional: Noise to add to EPSP trace, in mV. Default = 1.", default = 1 )
     parser.add_argument( "-freq", "--noiseFreq", type = float, help = "Optional: Bandwidth of noise to add to EPSP trace, in Hz. Default = 200.", default = 200 )
-    parser.add_argument( "-t", "--threshold", type = float, help = "Optional: Threshold for classifying an EPSP trace as an event. In mV. Default = 0.5.", default = 0 )
+    parser.add_argument( "-t", "--threshold", type = float, help = "Optional: Threshold for classifying an EPSP trace as an event. In mV. Default = 0.5.", default = 0.5 )
     args = parser.parse_args()
     df = pandas.read_hdf( args.fname )
     plt.rcParams.update( {"font.size": 20} )
     fig = plt.figure( figsize = (10,24) )
     gs = fig.add_gridspec( 7, 2 ) # 7 rows, 2 cols
-    ehisto, vhisto = plotFrame( gs, fig, args, df, 0, 0 )
+    exptpsd5, exptpsd15, epk5, epk15 = plotFrame( gs, fig, args, df, 0, 0 )
     if args.fname2:
         df2 = pandas.read_hdf( args.fname2 )
         # Here we check if it is real or synth data
-        eh2, vh2 = plotFrame( gs, fig, args, df2, 1, 0 )
+        simpsd5, simpsd15, spk5, spk15 =plotFrame( gs, fig, args, df2, 1, 0)
+    epk5 = np.array(epk5).flatten()
+    epk5 = epk5/np.mean(epk5)
+    epk15 = np.array(epk15).flatten()
+    epk15 = epk15/np.mean(epk15)
+    spk5 = np.array(spk5).flatten()
+    spk5 = spk5/np.mean(spk5)
+    spk15 = np.array(spk15).flatten()
+    spk15 = spk15/np.mean(spk15)
+    ks_stat5, ks_p5 = stats.ks_2samp( epk5, spk5 )
+    ks_stat15, ks_p15 = stats.ks_2samp( epk15, spk15 )
+    print( "KS_stat5 etc = ", ks_stat5, ks_p5, ks_stat15, ks_p15 )
+    print( "KS_stat5={:.3f}, KS_p5 ={:.4e}; KS_stat15={:.3f}, KS_p15={:.4e}".format( ks_stat5, ks_p5, ks_stat15, ks_p15 ) )
+    mw_stat5, mw_p5 = stats.mannwhitneyu( epk5, spk5 )
+    mw_stat15, mw_p15 = stats.mannwhitneyu( epk15, spk15 )
+    print( "mw_stat5={:.3f}, mw_p5 ={:.4e}; mw_stat15={:.3f}, mw_p15={:.4e}".format( mw_stat5, mw_p5, mw_stat15, mw_p15 ) )
 
-        stat5, pval5 = kstest( ehisto[0], eh2[0] )
-        stat15, pval15 = kstest( ehisto[1], eh2[1] )
-        print ( "KS Tests: EPSPs. 5 Sq Stat = {:.3f}, pval = {:.4f}, 15Sq: {:.3f}, {:.4f}".format( stat5, pval5, stat15, pval15 ) )
+    corr5, pval5 = stats.pearsonr(exptpsd5, simpsd5)
+    corr15, pval15 = stats.pearsonr(exptpsd15, simpsd15)
+    print( "Pearson: c5={:.3f}, p5 ={:.4e}; c15={:.3f}, p15={:.4e}".format(
+        corr5, pval5, corr15, pval15 ) )
 
-        stat5, pval5 = kstest( vhisto[0], vh2[0] )
-        stat15, pval15 = kstest( vhisto[1], vh2[1] )
-        print ( "KS Tests: EPSPVars. 5sq: Stat = {:.3f}, pval = {:.4f}, 15Sq: {:.3f}, {:.4f}".format( stat5, pval5, stat15, pval15 ) )
+    corr5, pval5 = stats.spearmanr(exptpsd5, simpsd5)
+    corr15, pval15 = stats.spearmanr(exptpsd15, simpsd15)
+    print( "Spearman:c5={:.3f}, p5 ={:.4e}; c15={:.3f}, p15={:.4e}".format(
+        corr5, pval5, corr15, pval15 ) )
+
+    print( flush = True )
     fig.tight_layout()
     plt.show()
 
@@ -471,14 +694,26 @@ def main():
 def plotFrame(gs, fig, args, df, column = 0, cell = 0):
     global pulseTrig
     global pulseThresh
+    NUMPULSE = 32
 
     # Set up the stimulus timings
     ax = fig.add_subplot( gs[column,:] ) # Hack: col 0 comes in row 0, col 1 in row 2
+    '''
+    '''
     panelA_SampleTrace( ax, df, column, args )
     #dcell4041 = df.loc[df["cellID"] == 4041]
     pk5, pk15, fpk5, fpk15, patDict = scanData( df, args )
     print( "LENGTHS = ", len( pk5 ), len( pk15 ), len( fpk5 ), len( fpk15 ) )
-    subtitle = "Experiment" if column == 0 else "Model"
+    print( "PULSE TRAIN 32 = ", PulseTrain[NUMPULSE]/ SAMPLE_FREQ )
+    dataname = "Expt" if column == 0 else "Sim"
+    pt = np.array( PulseTrain ) / SAMPLE_FREQ
+    doLinFit( pt[:NUMPULSE], np.array(pk5)[:, :NUMPULSE], dataname +  " 5 sq" )
+    doLinFit( pt[:NUMPULSE], np.array(pk15)[:, :NUMPULSE], dataname + " 15 sq" )
+    doExpFitISI( np.array(pk5), dataname +  " 5 sq" )
+    doExpFitISI( np.array(pk15), dataname + " 15 sq" )
+    print( flush = True )
+    '''
+    '''
     panelC_probVsTime( fig.add_subplot(gs[2,column]), column, pk5, pk15 )
     panelE_epspVsTime( fig.add_subplot(gs[3,column]), column, pk5, pk15 )
     #panelD_fepspVsISI(  fig.add_subplot(gs[2,0]), fpk5, fpk15 )
@@ -486,10 +721,12 @@ def plotFrame(gs, fig, args, df, column = 0, cell = 0):
     #panelFG_epspVsField( fig.add_subplot(gs[3,0]), fpk5, "F" )
     #panelFG_epspVsField( fig.add_subplot(gs[3,1]), fpk15, "G" )
     #panelH_fpkHisto( fig.add_subplot(gs[4,0]), fpk5, fpk15 )
-    ehisto = panelI_epkHisto( fig.add_subplot(gs[5,column]), column, pk5, pk15 )
-    vhisto = panelK_varianceHisto( fig.add_subplot(gs[6,column]), column, patDict )
-    return ehisto, vhisto
+    panelI_epkHisto( fig.add_subplot(gs[5,column]), column, pk5, pk15 )
+    #panelK_varianceHisto( fig.add_subplot(gs[6,column]), column, patDict )
+    psd5, psd15=panelK_FFT(fig.add_subplot(gs[6,column]), df, column, args)
+    return psd5, psd15, pk5, pk15
     
 
 if __name__ == "__main__":
     main()
+
