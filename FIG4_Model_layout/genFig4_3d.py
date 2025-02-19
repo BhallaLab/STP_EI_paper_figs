@@ -536,27 +536,20 @@ def innerMain( args ):
     makeNetwork( rdes )
 
     moose.reinit()
-    '''
-    print( "NumGluR = ", len( moose.vec('/model/chem/glu/glu') ),
-        "  NumGABA sites = ", 
-        len(moose.vec( '/model/chem/GABA/GABA' )) )
-    print( "NumSpines = ", len(moose.wildcardFind( '/model/elec/head#' )),
-            "  NumGABA sites = ", 
-            len(moose.wildcardFind( '/model/chem/GABA/GABA[]' )) )
-    '''
-    #runtime = SAMPLE_TIME
+
     # For the purposes of display, run it only for 0.205 sec.
     runtime = 0.205
 
-    if args.voltage_clamp:
-        moose.element( "/model/stims/stim0" ).expr = gluR_clamp_potl
     moose.reinit()
     rdes.displayMoogli( 0.001, runtime, rotation = 0.00, mergeDisplays=True,
-        azim = 10, elev = 10 ) # currently azim and elev do nothing
+        bg = 'white', azim = 0.0010, elev = 0.10, 
+        center = [ 0.0001, 0.000, 0.00] ) 
+    # currently azim and elev do nothing
+    #rdes.displayMoogli( 0.001, runtime, rotation = 0.00, mergeDisplays=True,
+        #azim = 10, elev = 10 ) # currently azim and elev do nothing
 
     moose.delete( "/model" )
     moose.delete( "/library" )
-    return (plot0, plotE, plotI, patternIdx, args.repeatIdx, args.seed)
 
 def runSession( args ):
     fname = "{}_{}_{}_{}_{}.h5".format( Path( args.outputFile ).stem, args.wtGlu, args.wtGABA, args.pCA3_Inter, args.ChR2_ampl)
@@ -591,7 +584,7 @@ def main():
     parser.add_argument( '-spk', '--spiking', action="store_true", help ='Flag: when set, use high Na/K channel densities in soma to get spiking.' )
     parser.add_argument( '-v', '--voltage_clamp', action="store_true", help ='Flag: when set, do voltage clamp for glu and GABA currents respectively.')
     parser.add_argument( '-d', '--deterministic', action="store_true", help ='Flag: when set, use deterministic ODE solver. Normally uses GSSA stochastic solver.')
-    parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn82.g" )
+    parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn86.g" )
     parser.add_argument( "-s", "--seed", type = int, help = "Optional: Seed to use for random numbers both for Python and for MOOSE.", default = 1234 )
     parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=1", default = 1.0 )
     parser.add_argument( "-wglu", "--wtGlu", type = float, help = "Optional: weight scaling factor for Glu synapses. Default=0.5", default = 0.5 )
