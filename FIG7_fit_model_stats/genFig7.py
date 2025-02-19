@@ -630,10 +630,10 @@ def main():
     parser.add_argument( '-d', '--deterministic', action="store_true", help ='Flag: when set, use deterministic ODE solver. Normally uses GSSA stochastic solver.')
     parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn86.g" )
     parser.add_argument( "-s", "--seed", type = int, help = "Optional: Seed to use for random numbers both for Python and for MOOSE.", default = 1234 )
-    parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=1", default = 1.0 )
-    parser.add_argument( "-wglu", "--wtGlu", type = float, help = "Optional: weight scaling factor for Glu synapses. Default=2.0", default = 2.0 )
+    parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=0.5", default = 0.5 )
+    parser.add_argument( "-wglu", "--wtGlu", type = float, help = "Optional: weight scaling factor for Glu synapses. Default=3.0", default = 3.0 )
     parser.add_argument( "-vGABA", "--volGABA", type = float, help = "Optional: Volume scaling factor for GABA synapses. Default=0.5", default = 0.5 )
-    parser.add_argument( "-wGABA", "--wtGABA", type = float, help = "Optional: Weight of GABA synapses. Default=20", default = 20 )
+    parser.add_argument( "-wGABA", "--wtGABA", type = float, help = "Optional: Weight of GABA synapses. Default=10", default = 10 )
     parser.add_argument( "--pInter_CA1", type = float, help = "Optional: Probability of a given Interneuron connecting to the CA1 cell. Default=0.01 ", default = 0.01 )
     parser.add_argument( "--pCA3_CA1", type = float, help = "Optional: Probability of a given CA3 cell connecting to the CA1 cell. Default=0.02 ", default = 0.02 )
     parser.add_argument( "--pCA3_Inter", type = float, help = "Optional: Probability of a given CA3 cell connecting to an interneuron. Default=0.01 ", default = 0.01 )
@@ -645,12 +645,20 @@ def main():
     runSession( args, "orig" )
 
     orig = args.wtGlu
+    for args.wtGlu in [1.5, 2, 2.5, 4]:
+        runSession( args, "wtGlu" )
+    args.wtGlu = orig
+    '''
+    orig = args.wtGlu
     for args.wtGlu in [1.0, 5.0]:
         runSession( args, "wtGlu" )
     args.wtGlu = orig
+    '''
 
+    '''
+    # Run these at half volGlu
     orig = args.wtGABA
-    for args.wtGABA in [10, 50]:
+    for args.wtGABA in [5, 20]:
         runSession( args, "wtGABA" )
     args.wtGABA = orig
 
@@ -686,6 +694,7 @@ def main():
     args.deterministic = True
     args.numRepeats = 1
     runSession( args, "deterministic" )
+    '''
 
     
 if __name__ == "__main__":
