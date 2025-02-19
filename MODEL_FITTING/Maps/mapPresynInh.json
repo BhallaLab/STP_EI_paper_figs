@@ -1,0 +1,19 @@
+{
+	"CaInput": ["GABA/Ca_ext"],
+	"Ca": ["GABA/Ca"],
+	"Buffer": ["GABA/Buffer"],
+	"glu": ["glu/glu"],
+	"GABA": ["GABA/GABA"],
+	"RR_pool": ["GABA/RR_pool"],
+	"vesicle_pool": ["GABA/vesicle_pool"],
+	"Docked": ["GABA/Docked"],
+	"Ca_bind_RR": ["GABA/Ca_bind_RR"],
+	"docking": ["GABA/docking"],
+	"undocking": ["GABA/undocking"],
+	"vesicle_release": ["GABA/vesicle_release"],
+	"replenish_vesicle": ["GABA/replenish_vesicle"],
+	"remove": ["GABA/remove"],
+	"remove_Ca": ["GABA/remove_Ca"],
+	"Ca_bind_buffer": ["GABA/Ca_bind_buffer"],
+	"soma": ["soma"]
+}
