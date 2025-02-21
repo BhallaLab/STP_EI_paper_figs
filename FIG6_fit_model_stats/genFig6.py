@@ -14,7 +14,7 @@ numPulses = 16
 stimAmpl = 5e-2     # mM
 basalCa = 0.08e-3   # mM
 GABAdelay = 5.0e-3  # seconds
-width = 0.002
+stimWidth = 0.002
 firstPlotEntry = ['soma', '1', '.', 'Vm', 'Membrane potential']
 numSq = 15
 
@@ -23,15 +23,15 @@ GABAStimStr = "8e-5"
 gluR_clamp_potl = "-0.07"
 GABAR_clamp_potl = "0.0"
 GABAR_clamp_offset = 0.1    # nA
-gluConductanceScale = 0.3   # Relative to default value in the spine proto
-gluTau2Scale = 4   # Relative to default value in the spine proto
+gluConductanceScale = 2   # Relative to default value in the spine proto
+gluTau2Scale = 2   # Relative to default value in the spine proto
 
 numCA1Exc = 100
 numCA1Inh = 200
 pCA3_CA1 = 0.0002
 pCA3_Inter = 0.0008
 pInter_CA1 = 0.004
-fracDesensitize = 1.2 # 1/4 of CA3 cells are active early but desensitize
+#fracDesensitize = 1.2 # 1/4 of CA3 cells are active early but desensitize
 
 #used as globals. 
 CA3_CA1 = 0.0002
@@ -51,12 +51,24 @@ patternData = "../../../2022/VC_DATA/all_cells_SpikeTrain_CC_long.h5"
 SAMPLE_FREQ = 20000
 elecDt = 0.00005
 chemDt = 0.0005
-SAMPLE_TIME = 5
+SAMPLE_TIME = 11
 #SAMPLE_TIME = 2
 NUM_SAMPLES = SAMPLE_FREQ * SAMPLE_TIME
 SAMPLE_START = 49
 SWEEP = 16
 patternDict2 = {}
+
+## Here are params for the ChR2 desensitization
+tauCell = 0.010         # Charging tau through gLeak
+ChR2chanOpenTime = 0.001     # Balances out tauChR2chan
+tauChR2chan = 0.005     # Charging tau through ChR2chan.
+tauChR2recovery = 1.5   # Tau for recovery
+ChR2decrement = 0.0004  # Scaling for decrement
+ChR2_basal_desensitization = 0.01
+Erest = 0               # Using baseline as zero.
+EChR2 = 60              # Reversal potl in mV relative to baseline.
+## Here are the params for the charging/firing of CA3 cells due to ChR2
+charge_max = 20.0    
 
 PulseTrain = np.array([4001,10684,11276,11603,13433,15914,16193,17131,19457,19827,20561,21153,21578,
     22460,24407,24665,25093,25667,26213,26726,27343,28046,28625,29322,29608,31223,31729,32400,32756,
@@ -75,6 +87,34 @@ PulseTrain = np.array([4001,10684,11276,11603,13433,15914,16193,17131,19457,1982
     190837,191267,191619,192282,192848,193144,193689,194521,195822,196751,197884,199981,200689,201095,
     202108,203280,204018,205585,206552,207234,207796,209126,209832])
 
+TRIG = np.zeros( NUM_SAMPLES )
+for ii in PulseTrain:
+    TRIG[ii] = 1.0
+
+ReducedPulseIdx = np.zeros( round(SAMPLE_TIME / chemDt ), dtype=int )
+for pp in PulseTrain:
+    ReducedPulseIdx[round(pp / 10)] = 1
+
+def desensitization( events, dt ):
+    ret = []
+    lastStim = -10.0    # Long time since last event.
+    dy = ChR2_basal_desensitization
+    Vm = Erest
+    G = 1.0
+    for idx, rr in enumerate( events ):
+        t = idx * dt
+        if rr:
+            dy =  ChR2_basal_desensitization + ChR2decrement/(t-lastStim)
+            #G -= dt * G*( 1-np.exp(-dy) )
+            G -= G*( 1-np.exp(-dy) )
+            Vm += ChR2chanOpenTime * ( EChR2-Vm ) * G / tauChR2chan
+            lastStim = t
+        G += dt * ( 1-G )/tauChR2recovery
+        Vm += dt * (Erest-Vm)/tauCell
+        ret.append( Vm )
+    return np.array( ret )
+        
+FracChR2active = desensitization( ReducedPulseIdx, chemDt )
 
 def patternDict():
     patternZeros = [0]*64
@@ -91,24 +131,24 @@ def patternDict():
              1,0,0,0,0,0,0,1,]
 
     patternB =  [
-             0,0,0,0,0,0,0,0,
              0,1,1,1,1,1,0,0,
-             0,0,1,0,0,0,1,0,
-             0,0,1,1,1,1,0,0,
-             0,0,1,0,0,0,1,0,
-             0,1,1,0,0,0,1,0,
-             0,1,1,1,1,1,1,0,
+             0,1,0,0,0,1,0,0,
+             0,1,0,0,0,1,0,0,
+             0,1,1,1,1,0,0,0,
+             0,1,0,0,0,1,0,0,
+             0,1,0,0,0,0,1,0,
+             0,1,1,1,1,1,0,0,
              0,0,0,0,0,0,0,0,]
 
     patternC =  [
-             0,0,0,0,0,0,0,0,
-             0,0,1,1,1,0,0,0,
-             0,1,0,0,0,1,0,0,
-             0,1,0,0,0,0,0,0,
-             0,1,0,0,0,0,0,0,
-             0,1,0,0,0,1,0,0,
-             0,0,1,1,1,0,0,0,
-             0,0,0,0,0,0,0,0,]
+             0,1,1,1,1,1,1,1,
+             1,1,0,0,0,0,0,0,
+             1,0,0,0,0,0,0,0,
+             1,0,0,0,0,0,0,0,
+             1,0,0,0,0,0,0,0,
+             1,0,0,0,0,0,0,0,
+             1,1,0,0,0,0,0,0,
+             0,1,1,1,1,1,1,1,]
 
     patternD =  [
              0,0,0,0,0,0,0,0,
@@ -132,43 +172,43 @@ def patternDict():
 
     patternF =  [ 
              0,0,0,0,0,0,0,0,
+             1,1,1,1,1,1,1,1,
+             1,1,1,1,1,1,1,1,
+             1,1,0,0,0,0,0,0,
              1,1,1,1,1,1,1,0,
-             1,0,0,0,0,0,0,0,
-             1,0,0,0,0,0,0,0,
-             1,1,1,1,1,1,0,0,
-             1,1,1,1,1,0,0,0,
-             1,0,0,0,0,0,0,0,
-             1,0,0,0,0,0,0,0,]
+             1,1,1,1,1,1,1,0,
+             1,1,0,0,0,0,0,0,
+             1,1,0,0,0,0,0,0,]
 
     patternG =  [
              0,0,1,1,1,1,1,0,
-             0,1,0,0,0,0,0,1,
-             0,1,0,0,0,0,0,0,
-             0,1,0,0,0,1,1,0,
-             0,1,0,0,0,0,0,1,
-             0,1,0,0,0,0,0,1,
-             0,1,0,0,0,0,0,1,
+             0,1,1,1,1,1,1,1,
+             0,1,1,0,0,0,0,0,
+             0,1,1,0,0,1,1,0,
+             0,1,1,0,0,0,1,1,
+             0,1,1,0,0,0,1,1,
+             0,1,1,1,1,1,1,1,
              0,0,1,1,1,1,1,0,]
 
     patternH =  [
-             1,0,0,0,0,0,1,0,
-             1,0,0,0,0,0,1,0,
-             1,0,0,0,0,0,1,0,
+             1,1,0,0,0,1,1,0,
+             1,1,0,0,0,1,1,0,
+             1,1,0,0,0,1,1,0,
              1,1,1,1,1,1,1,0,
-             1,0,0,0,0,1,1,0,
-             1,0,0,0,0,0,1,0,
-             1,0,0,0,0,0,1,0,
-             1,0,0,0,0,0,1,0,]
+             1,1,1,1,1,1,1,0,
+             1,1,0,0,0,1,1,0,
+             1,1,0,0,0,1,1,0,
+             1,1,0,0,0,1,1,0,]
 
     patternI =  [
-             0,0,1,1,1,1,0,0,
-             0,0,0,1,1,0,0,0,
-             0,0,0,1,1,0,0,0,
-             0,0,0,1,1,0,0,0,
-             0,0,0,1,1,0,0,0,
-             0,0,0,1,1,0,0,0,
-             0,0,0,1,1,0,0,0,
-             0,1,1,1,1,1,1,0,]
+             0,1,1,1,1,1,1,0,
+             0,1,1,1,1,1,1,0,
+             0,0,0,1,1,1,0,0,
+             0,0,0,1,1,1,0,0,
+             0,0,0,1,1,1,0,0,
+             0,0,0,1,1,1,0,0,
+             1,1,1,1,1,1,1,1,
+             1,1,1,1,1,1,1,1,]
 
     return {
             '0': np.array( patternZeros, dtype = float),
@@ -206,27 +246,59 @@ pandasColumnNames = [
 
 colIdx = { nn:idx for idx, nn in enumerate( pandasColumnNames )}
 
-def makeRow( data, args ):
-    TRIG = np.zeros( NUM_SAMPLES )
-    TRIG[int( round( 0.2*SAMPLE_FREQ ) )] = 1.0
-    for ii in range(32):
-        idx = int( round (0.5 * SAMPLE_FREQ + ii*SAMPLE_FREQ/args.freq) )
-        TRIG[idx] = 1.0
-        #print( ii, "TRIG = ", idx )
-    row = [0]*SAMPLE_START + list( data[:NUM_SAMPLES] ) + [0.0]*NUM_SAMPLES + list(TRIG) + [0.0]*NUM_SAMPLES
-    row[colIdx['exptSeq']] = 0
-    row[colIdx["patternList"]] = [46,47,48,49]
-    row[colIdx["numSq"]] = 5
-    row[colIdx["sweep"]] = args.repeatIdx
-    row[colIdx["stimFreq"]] = args.freq
+def makeRow( pattern, repeat, data, edata, idata, args ):
+    #row = [0]*SAMPLE_START + list( data[:NUM_SAMPLES] ) + [0.0]*NUM_SAMPLES + list(TRIG) + [0.0]*NUM_SAMPLES
+    row = [0]*SAMPLE_START + list( data[:NUM_SAMPLES] ) + list( edata[:NUM_SAMPLES] ) + list(TRIG) + list( idata[:NUM_SAMPLES] )
+    row[colIdx['exptSeq']] = repeat
+    row[colIdx["patternList"]] = pattern
+    row[colIdx["numSq"]] = 5 if pattern < 51 else 15
+    row[colIdx["sweep"]] = pattern * args.numRepeats + repeat
     row[colIdx["clampMode"]] = "VC" if args.voltage_clamp else "CC"
     # Do clampPotential
     row[colIdx["intensity"]] = 100
-    row[colIdx["protocol"]] = "surprise"
+    row[colIdx["protocol"]] = "SpikeTrain"
 
     return row
 
-
+def evenOutConnectivity( connMtx, px, patternDict2 ):
+    # patTemplate whose nonzero entries are the pattern # of unique pts
+    patList = [46,47,48,49,50]
+    patTemplate = np.zeros( len( px[0].flat), dtype = int ) 
+    for pp, qq in zip( px, patList):
+        patTemplate += np.array(pp.flat, dtype = int ) * qq
+    for idx, pp in enumerate( patTemplate ):
+        if pp > 55:
+            patTemplate[idx] = 0
+    #print( "UNIQUE = ", np.unique( patTemplate ) )
+    # for each pattern, form a list of the indices of unique entries.
+    uniqueEntries = { pp:[idx for idx, tt in enumerate(patTemplate) if tt == pp] for pp in patList}
+    #print( uniqueEntries ) 
+    meanNumSyn = 0
+    maxNumSyn = 0
+    numSyn = {}
+    for pp in patList:
+        pat = patternDict2[pp]
+        numSyn[pp] = sum( np.matmul( connMtx, pat ) > 0 )
+        meanNumSyn += numSyn[pp]
+        maxNumSyn = max( numSyn[pp], maxNumSyn )
+        print( "pat {}: len = {}".format( pp, numSyn[pp] )  )
+    meanNumSyn = int( meanNumSyn / len( patList ) ) # Go for the mean.
+    print( "Mean = ", meanNumSyn, "Max = ", maxNumSyn )
+    for pp in patList:
+        uu = uniqueEntries[pp]
+        for qq in range( maxNumSyn - numSyn[pp] ):
+        #for qq in range( meanNumSyn - numSyn[pp] ):
+            if qq < len( uu ):
+                # Now we need to find untouched synapses for this pixel
+                syns = connMtx[:,uu[qq]].flat
+                #print( "doing", qq, uu[qq], len(syns) )
+                zz = np.arange( len(syns), dtype=int)[syns == 0 ]
+                if qq < len( zz ):
+                    syns[zz[qq]] = 1
+    for pp in patList:
+        pat = patternDict2[pp]
+        ret = sum( np.matmul( connMtx, pat ) > 0 )
+        print( "After fix: pat {}: len = {}".format( pp, ret )  )
 
 
 def generatePatterns( args ):
@@ -237,20 +309,19 @@ def generatePatterns( args ):
     pd = patternDict()
 
     # Assumes all are random projections.
-    # Note that I initialize the stochastic chem seed AFTER I use the
-    # seed here, for setting up the connectivity. This means that the
-    # connectivity is the same for all the runs even though their 
-    # synaptic stochastic seed differs.
     np.random.seed( args.seed )
     CA3_Inter = (np.random.rand( 256, 256 ) < args.pCA3_Inter) * 1.0
     CA3_CA1 = (np.random.rand( numCA1Exc, 256 ) < args.pCA3_CA1) * 1.0
     Inter_CA1 = (np.random.rand( numCA1Inh, 256 ) < args.pInter_CA1) * 1.0
     px = []
     for char in ["A", "B", "C", "D", "E"]:
-        temp = pd[char].reshape(8,8).repeat(2, axis = 0)
-        temp2 = np.array(temp)
-        temp2[:,5:] = 0
-        px.append( np.append(temp2.reshape(-1), np.zeros(128) ) )
+        #temp = pd[char].reshape(8,8).repeat(2, axis = 0)
+        temp = np.array(pd[char]).reshape(8,8).repeat(4, axis=0).reshape(-1)
+        # Now put in a mask that zeros 3/4 of the values
+        zero_indices = np.random.choice(256, args.zeroIndices,replace=False)
+        temp[zero_indices] = 0
+        px.append( temp )
+        #px.append( np.append(temp2.reshape(-1), np.zeros(128) ) )
 
     patternDict2 = {
         46:px[0],
@@ -262,8 +333,10 @@ def generatePatterns( args ):
         53:pd["G"].reshape(8,8).repeat( 4, axis=0 ).reshape(-1),
         55:pd["H"].reshape(8,8).repeat( 4, axis=0 ).reshape(-1)
     }
-
-
+    print( "Even out CA3_CA1::" )
+    evenOutConnectivity( CA3_CA1, px, patternDict2 )
+    print( "\nEven out CA3_Inter::" )
+    evenOutConnectivity( CA3_Inter, px, patternDict2 )
 
 class MooArg:
     def __init__( self, title, field ):
@@ -304,15 +377,11 @@ def makeInputs( name, xOffset ):
 
 #def buildModel( presynModelName, seed, useGssa, vGlu, vGABA, spiking ):
 def buildModel( args ):
-    presynModelName = args.modelName
     useGssa = not args.deterministic
-    vGlu = args.volGlu
-    vGABA = args.volGABA
-    spiking = args.spiking
-    rGlu = pow( vGlu, 1.0/3.0)
-    rGABA = pow( vGABA, 1.0/3.0)
-    NaGbar = 400.0 if spiking else 6.0
-    KGbar = 450.0 if spiking else 3.5
+    rGlu = pow( args.volGlu, 1.0/3.0)
+    rGABA = pow( args.volGABA, 1.0/3.0)
+    NaGbar = 400.0 if args.spiking else 6.0
+    KGbar = 450.0 if args.spiking else 3.5
 
     rdes = rd.rdesigneur(
         elecDt = elecDt,
@@ -331,7 +400,7 @@ def buildModel( args ):
             ['spine', 'dend#', '2e-6', '-1e-6', '1', '0.5']  
             ],
         chemProto = [
-            ['Models/{}'.format( presynModelName ), 'chem'],
+            ['Models/{}'.format( args.modelName ), 'chem'],
         ],
         chanProto = [
             ['make_Na()', 'Na'],
@@ -339,10 +408,8 @@ def buildModel( args ):
             ['make_GABA()', 'GABA']
         ],
         # Some changes to the default passive properties of the cell.
-        #passiveDistrib = [['soma', 'CM', '0.03', 'Em', '-0.065']],
         passiveDistrib = [
-            ['soma', 'RM', '1.0', 'CM', '0.01', 'Em', '-0.065'],
-            ['dend#', 'RM', '1.0', 'CM', '0.01', 'Em', '-0.065']
+            ['#', 'CM', '0.01', 'Em', '-0.065', 'RM', '1.0']
         ],
         chemDistrib = [
             # Args: chem_model, elec_compts, mesh_type, spatial_distrib, r_scalefactor, radius_sdev
@@ -353,7 +420,7 @@ def buildModel( args ):
         chanDistrib = [
             ['Na', 'soma', 'Gbar', str(NaGbar) ],
             ['K', 'soma', 'Gbar', str(KGbar) ],
-            ['GABA', 'dend#', 'Gbar', '3.2' ]
+            ['GABA', 'dend#', 'Gbar', str( args.wtGABA ) ]
         ],
         adaptorList = [
             [ 'glu/glu', 'n', 'glu', 'activation', 0.0, 1500 ],
@@ -374,11 +441,10 @@ def buildModel( args ):
             ['dend#', '1', 'GABA/GABA', 'n', 'GABA_released'],
         ]
     )
-    # Note that I initialize the stochastic chem seed AFTER I use the
-    # seed for setting up the connectivity.
-    moose.seed( args.seed + args.freq * args.numRepeats + args.repeatIdx ) 
+    moose.seed( args.seed ) 
     gluReceptor = moose.element( '/library/spine/head/glu' )
-    gluReceptor.Gbar *= gluConductanceScale # Tweak conductance
+    gluReceptor.Gbar *= args.wtGlu # Tweak conductance
+    #print ( "GLUGGGGG = ", vGlu, gluConductanceScale )
     gluReceptor.tau2 *= gluTau2Scale # Tweak closing time
     moose.element( '/library/GABA' ).Ek = -0.07 # Tweak Erev.
     rdes.buildModel()
@@ -394,54 +460,68 @@ def buildModel( args ):
     moose.reinit()
     return rdes
 
-def isPulse( freq, t ):
-    if t < 0.1999:
-        return False, 0
-    if t > 0.5 + 31.5/freq:
-        return False, 0
-    if np.isclose( t, 0.2, chemDt / 10 ):
-        return True, 0
-    if t < 0.5:
-        return False, 0
-    pulseNum = int( round( (t - 0.5) * freq))
-    #if (int( round( (t - 0.5) / chemDt)) % numSteps) == 0:
-    if np.isclose( t, 0.5 + pulseNum/freq, chemDt / 10 ):
-        #print( "pulseNum ={}, t = {:.4f}, {:4f}".format( pulseNum, t, 0.5 + pulseNum/freq ) )
-        return True, pulseNum // 8
-    return False, 0
 
-
-def stimFunc( freq ):
+def stimFunc( patternIdx, ChR2AmplScale ):
     t = moose.element( '/clock' ).currentTime
-    CA3isActive, patternIdx = isPulse( freq, t )
-    InterIsActive, patternIdx2 = isPulse( freq, t - GABAdelay )
-    #print( "isPulse: ", CA3isActive, patternIdx, InterIsActive, patternIdx2)
+    # Need to look up if this is time to generate pulse. 
+    stimWidthIdx = int( round( stimWidth / chemDt ) )
+    idx = int(round( t/chemDt ) )
+    if idx % int( 1.0/chemDt )  == 0:   # dot every second.
+        print( ".", flush = True, end = "" )
+    if idx >= len( ReducedPulseIdx ):
+        return
+    # Stim is to be delivered for the entire duration of stimWidth.
+    CA3isActive = ( sum( ReducedPulseIdx[idx-stimWidthIdx:idx] ) > 0.1 )
+    #CA3isActive = (ReducedPulseIdx[idx] > 0.5) #Stimulus is to be delivered
+    assert( len( FracChR2active ) == len( ReducedPulseIdx ) )
+    if idx > stimWidthIdx:
+        chr2Ampl = max(FracChR2active[idx-stimWidthIdx:idx]) * ChR2AmplScale
+    else:
+        chr2Ampl = FracChR2active[idx] * ChR2AmplScale
+    idx2 = int( round( (t - GABAdelay) / chemDt ) )
+    if idx2 >= len( ReducedPulseIdx ):
+        return
+    if idx2 > stimWidthIdx:
+        chr2Ampl2 = max(FracChR2active[idx2-stimWidthIdx:idx2]) * ChR2AmplScale
+    else:
+        chr2Ampl2 = FracChR2active[idx2] * ChR2AmplScale
+    InterIsActive = ( sum( ReducedPulseIdx[idx2-stimWidthIdx:idx2] ) > 0.5 )
+    #InterIsActive = ( ReducedPulseIdx[idx2] > 0.5 )
     gluInput = moose.vec( "/model/chem/glu/Ca_ext" )
     gabaInput = moose.vec( "/model/chem/GABA/Ca_ext" )
-    thresh = 2.0
     if CA3isActive:
-        inputPattern = patternDict2[46 + patternIdx]
-        #print( "Trig CA3 at {:.3f} with {}".format( t, patternIdx+46 ))
-        print( ".", end = "", flush = True )
+        #print( "Trig CA3 at {:.3f} {} with {}".format( t, idx, patternIdx ))
+        inputPattern = patternDict2[patternIdx]
         ca3cells = moose.vec( "/model/elec/CA3/soma" )
+        pd = patternDict2[patternIdx]
+        amplIdx = min( len( pd ), int( chr2Ampl * len( pd ) ) )
+        pd =  np.append( pd[:amplIdx], np.zeros( len(pd)-amplIdx ) )
+        ca3cells.Vm = pd
         '''
-        sensThresh = fracDesensitize * (2.0 - t) * sum(inputPattern)/len(inputPattern)
-        sensitization = np.zeros( len( ca3cells ) )
-        sensitization[ np.random.rand( len( ca3cells ) ) < sensThresh ] =1.0
-        ca3cells.Vm = inputPattern + sensitization
+        #ca3cells.Vm = np.where( np.random.rand(len(pd)) < chr2Ampl, pd, 0 )
+        amplIdx = min( len( pd ), int( chr2Ampl * len( pd ) ) )
+        ca3cells.Vm = np.append( pd[:amplIdx], np.zeros( len(pd)-amplIdx ) )
         '''
-        ca3cells.Vm = inputPattern
+
         gluInput.concInit = (np.matmul( CA3_CA1, ca3cells.Vm ) >= thresh_CA3_CA1 ) * stimAmpl
+        #print( "SENSE = ", t, len( sensitization), sum( sensitization ), sum( ca3cells.Vm ), sum(gluInput.concInit ) )
+        if patternIdx == 46:
+            print( "{}  t={:.5f}  NUMGlu={:.1f}    chr2Ampl={:.3f}".format( patternIdx, t, sum( gluInput.concInit ) / stimAmpl, chr2Ampl ), flush=True )
     else:
         moose.vec( "/model/elec/CA3/soma" ).Vm = 0.0
         gluInput.concInit = basalCa
 
     if InterIsActive:
-        inputPattern = patternDict2[46 + patternIdx2]
-        #print( "Trig Inter at {:.3f} with {}".format( t, patternIdx2+46 ))
+        pd = patternDict2[patternIdx]
+        amplIdx = min( len( pd ), int( chr2Ampl2 * len( pd ) ) )
+        #pd = np.where( np.random.rand( len( pd ) ) < chr2Ampl, pd, 0 )
+        pd =  np.append( pd[:amplIdx], np.zeros( len(pd)-amplIdx ) )
+
         Inter = moose.vec( "/model/elec/Inter/soma" )
-        Inter.Vm = (np.matmul( CA3_Inter, inputPattern) >= thresh_CA3_Inter ) * 1.0
+        Inter.Vm = (np.matmul( CA3_Inter, pd) >= thresh_CA3_Inter ) * 1.0
         gabaInput.concInit = (np.matmul( Inter_CA1, Inter.Vm ) >= thresh_Inter_CA1 ) * stimAmpl
+        if patternIdx == 46:
+            print( "{}  NUMGABA={:.1f}    chr2Ampl={:.3f}".format( patternIdx, sum( gabaInput.concInit) / stimAmpl, chr2Ampl2 ), flush=True )
     else:
         gabaInput.concInit = basalCa
         moose.vec( "/model/elec/Inter/soma" ).Vm = 0
@@ -452,8 +532,8 @@ def makeNetwork( rdes ):
     CA3cells, CA3args = makeInputs( "CA3", 20e-6 )
     interneurons, interneuronArgs = makeInputs( "Inter", 70e-6 )
 
-
 def innerMain( args ):
+    patternIdx = args.pattern
     if args.voltage_clamp:
         stimList = [['soma', '1', '.', 'vclamp', '-0.070' ]]
         firstPlotEntry = ['soma', '1', 'vclamp', 'current','Vclamp current']
@@ -465,7 +545,7 @@ def innerMain( args ):
 
     rdes = buildModel( args )
     pr = moose.PyRun( "/model/stims/stimRun" )
-    pr.runString = 'stimFunc({})'.format( args.freq )
+    pr.runString = 'stimFunc({}, {})'.format( patternIdx, args.ChR2_ampl )
     pr.tick = 14 # This would be chemDt. Which is currently 0.5 ms.
 
     makeNetwork( rdes )
@@ -486,7 +566,13 @@ def innerMain( args ):
     moose.reinit()
     moose.start( runtime )
     offset = -90.0 if args.spiking else -70.0
+    plotE = np.zeros( NUM_SAMPLES )
     plot0 = moose.element( '/model/graphs/plot0' ).vector
+    for ee in moose.vec( '/model/graphs/plot1' ):
+        plotE += ee.vector[:NUM_SAMPLES]
+    #print( "numSpinePlots = ", len( moose.vec( '/model/graphs/plot1' ) ) )
+    #plotE = moose.vec( '/model/graphs/plot1' )[gluSynIdx].vector
+    plotI = moose.vec( '/model/graphs/plot2' )[0].vector # Only one dend rec
     dt = moose.element( '/model/graphs/plot0' ).dt
     #t = np.arange( 0, len( plot0 ) * dt - 1e-6, dt )
     if args.voltage_clamp:
@@ -498,28 +584,33 @@ def innerMain( args ):
 
     moose.delete( "/model" )
     moose.delete( "/library" )
-    return (plot0, args.freq, args.repeatIdx)
+    return (plot0, plotE, plotI, patternIdx, args.repeatIdx, args.seed)
 
-def runSession( args ):
-    fname = "{}_{}.h5".format( Path( args.outputFile ).stem, args.seed )
+def runSession( args, whichArg ):
+    changedValue = 0
+    if whichArg != "orig":
+        changedValue = getattr(args, whichArg)
+    fname = "{}_{}_{}.h5".format( Path( args.outputFile ).stem, whichArg, changedValue )
+    print( "Working on: ", fname )
     pool = multiprocessing.Pool( processes = args.numProcesses )
     ret = []
     data = []
     argdict = vars( args )
-    for freq in [8, 20, 50]:
+    for pattern in [46,47,48,49,50,52,53,55]:
+    #for pattern in [52]:
+        argdict["pattern"] = pattern
         for ii in range( args.numRepeats ):
             argdict["repeatIdx"] = ii
-            argdict["freq"] = freq
-            print( "Launching {}.{}".format( freq, ii ) )
+            argdict["seed"] = args.seed + pattern * args.numRepeats + ii
+            print( "Launching {}.{}".format( pattern, ii ) )
             innerArgs = argparse.Namespace( **argdict )
             ret.append( pool.apply_async( innerMain, args = (innerArgs, )))
     for rr in ret:
-        ( plot0, args.freq, args.repeatIdx ) = rr.get()
-        data.append( makeRow( plot0*1e3, args ) )
-
+        (plot0, plotE, plotI, patternIdx, repeatIdx, seed) = rr.get()
+        data.append( makeRow( patternIdx, repeatIdx, plot0, 1e12*plotE, 1e12*plotI, args ) )
     df = pandas.DataFrame(data, columns=pandasColumnNames + [str(i) for i in range( NUM_SAMPLES *4 ) ] )
+    #df.to_hdf( args.outputFile, "SimData", mode = "w", format='table', complevel=9)
     df.to_hdf( fname, "SimData", mode = "w", complevel=9)
-
 
 def main():
     global freq
@@ -537,23 +628,73 @@ def main():
     parser.add_argument( '-spk', '--spiking', action="store_true", help ='Flag: when set, use high Na/K channel densities in soma to get spiking.' )
     parser.add_argument( '-v', '--voltage_clamp', action="store_true", help ='Flag: when set, do voltage clamp for glu and GABA currents respectively.')
     parser.add_argument( '-d', '--deterministic', action="store_true", help ='Flag: when set, use deterministic ODE solver. Normally uses GSSA stochastic solver.')
-    parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn77.g" )
-    parser.add_argument( "-s", "--seed", type = int, help = "Optional: Seed to use for random numbers both for Python and for MOOSE.", default = 333 )
-    parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=1", default = 1.0 )
+    parser.add_argument( "-m", "--modelName", type = str, help = "Optional: specify name of presynaptic model file, assumed to be in ./Models dir.", default = "BothPresyn86.g" )
+    parser.add_argument( "-s", "--seed", type = int, help = "Optional: Seed to use for random numbers both for Python and for MOOSE.", default = 1234 )
+    parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=0.5", default = 0.5 )
+    parser.add_argument( "-wglu", "--wtGlu", type = float, help = "Optional: weight scaling factor for Glu synapses. Default=3.0", default = 3.0 )
     parser.add_argument( "-vGABA", "--volGABA", type = float, help = "Optional: Volume scaling factor for GABA synapses. Default=0.5", default = 0.5 )
-    parser.add_argument( "--pInter_CA1", type = float, help = "Optional: Probability of a given Interneuron connectiing to the CA1 cell. Default=0.004 ", default = 0.004 )
-    parser.add_argument( "--pCA3_CA1", type = float, help = "Optional: Probability of a given CA3 cell connecting to the CA1 cell. Default=0.0002 ", default = 0.0002 )
-    parser.add_argument( "--pCA3_Inter", type = float, help = "Optional: Probability of a given CA3 cell connecting to an interneuron. Default=0.0008 ", default = 0.0008 )
-    parser.add_argument( "-f", "--freq", type = float, help = "Optional: Frequency of pattern repeats in Hz. Default=20 ", default = 20.0 )
+    parser.add_argument( "-wGABA", "--wtGABA", type = float, help = "Optional: Weight of GABA synapses. Default=10", default = 10 )
+    parser.add_argument( "--pInter_CA1", type = float, help = "Optional: Probability of a given Interneuron connecting to the CA1 cell. Default=0.01 ", default = 0.01 )
+    parser.add_argument( "--pCA3_CA1", type = float, help = "Optional: Probability of a given CA3 cell connecting to the CA1 cell. Default=0.02 ", default = 0.02 )
+    parser.add_argument( "--pCA3_Inter", type = float, help = "Optional: Probability of a given CA3 cell connecting to an interneuron. Default=0.01 ", default = 0.01 )
+    parser.add_argument( "--ChR2_ampl", type = float, help = "Optional: Scale factor for ChR2 stimulus amplitude. Default=0.1", default = 0.1 )
+    parser.add_argument( "-z", "--zeroIndices", type = int, help = "Optional: Number of optical inputs to zero out, range 0 to 256. Default=192.", default = 192 )
 
-    parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simDataStoch.h5" )
+    parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
-    args.deterministic = False # Override
-    for args.volGlu in [0.8,]:
-        for args.pInter_CA1 in [0.003,]:
-            for args.pCA3_CA1 in [0.004,]:
-                for args.pCA3_Inter in [0.002,]:
-                    runSession( args )
+    runSession( args, "orig" )
+
+    orig = args.wtGlu
+    for args.wtGlu in [1.5, 2, 2.5, 4]:
+        runSession( args, "wtGlu" )
+    args.wtGlu = orig
+    '''
+    orig = args.wtGlu
+    for args.wtGlu in [1.0, 5.0]:
+        runSession( args, "wtGlu" )
+    args.wtGlu = orig
+    '''
+
+    '''
+    # Run these at half volGlu
+    orig = args.wtGABA
+    for args.wtGABA in [5, 20]:
+        runSession( args, "wtGABA" )
+    args.wtGABA = orig
+
+    orig = args.pCA3_CA1
+    for args.pCA3_CA1 in [0.01, 0.05]:
+        runSession( args, "pCA3_CA1" )
+    args.pCA3_CA1 = orig
+
+    orig = args.pCA3_Inter
+    for args.pCA3_Inter in [0.005, 0.02]:
+        runSession( args, "pCA3_Inter" )
+    args.pCA3_Inter = orig
+
+    orig = args.pInter_CA1
+    for args.pInter_CA1 in [0.005, 0.02]:
+        runSession( args, "pInter_CA1" )
+    args.pInter_CA1 = orig
+
+    orig = args.zeroIndices
+    for args.zeroIndices in [64, 96, 128, 224]:
+        runSession( args, "zeroIndices" )
+    args.zeroIndices = orig
+
+    orig = args.ChR2_ampl
+    for args.ChR2_ampl in [0.05, 0.2]:
+        runSession( args, "ChR2_ampl" )
+    args.ChR2_ampl = orig
+
+    args.modelName = "BothPresyn87.g"
+    runSession( args, "modelName" )
+
+    args.modelName = "BothPresyn86.g"
+    args.deterministic = True
+    args.numRepeats = 1
+    runSession( args, "deterministic" )
+    '''
 
     
 if __name__ == "__main__":
