@@ -1,0 +1,54 @@
+{
+    "FileType": "FindSim",
+    "Version": "1.0",
+    "Metadata": {
+        "transcriber": "Upi Bhalla",
+        "organization": "NCBS",
+        "email": "bhalla@ncbs.res.in",
+        "source": {
+            "sourceType": "simulation",
+            "authors": "U.S. Bhalla",
+            "descriptor": "Generated FindSim file from tab_presyn_patterns_vclamp2.py"
+        },
+        "testModel": "./Models/Exc_vclamp7492.py",
+        "testMap": "./Maps/mapPresynExc.json"
+    },  
+    "Experiment": {
+        "design": "TimeSeries",
+        "species": "mouse",
+        "cellType": "CA1 pyramidal neuron",
+        "notes": "Data is from recording of IPSC to 5 or 15 sq optical stim by Aditya Asopa"
+    },  
+    "Stimuli": [
+        {
+            "timeUnits": "sec",
+            "quantityUnits": "uM",
+            "entity": {"name": "CaInput"},
+            "field": "conc",
+            "data": [
+                [ 0, 0.08],
+                [1.0100, 50.000],
+                [1.0120, 0.080],
+                [1.0400, 0.080]
+            ]
+        }
+    ],  
+    "Readouts": {
+        "timeUnits": "sec",
+        "quantityUnits": "#",
+        "entity": {"name": "glu"},
+        "field": "n",
+        "window": {"startt": 0.0, "endt": 0.01, "dt": 0.001,
+            "operation": "mean"
+        },
+        "data": [
+            [1.0, 0, 0],
+            [1.011, 28.76820724517809, 0],
+            [1.020, 28.76820724517809, 0],
+            [1.030, 28.76820724517809, 0]
+        ]
+    },
+    "Modifications": {
+        "itemsToDelete": [ {"name": "remove"}]
+    }
+}

@@ -1,0 +1,92 @@
+{
+    "FileType": "FindSim",
+    "Version": "2.0",
+    "Metadata": {
+        "transcriber": "Upi Bhalla",
+        "organization": "NCBS",
+        "email": "bhalla@ncbs.res.in",
+        "source": {
+            "sourceType": "simulation",
+            "authors": "U.S. Bhalla",
+            "descriptor": "Generated FindSim file from tab_presyn_patterns_vclamp2.py"
+        },
+        "testModel": "./Models/Exc_vclamp7492.py",
+        "testMap": "./Maps/mapPresynExc.json"
+    },  
+    "Experiment": {
+        "design": "TimeSeries",
+        "species": "mouse",
+        "cellType": "CA1 pyramidal neuron",
+        "notes": "Data is from recording of IPSC to 5 or 15 sq optical stim by Aditya Asopa"
+    },  
+    "Stimuli": [
+        {
+            "timeUnits": "sec",
+            "quantityUnits": "mV",
+            "entity": {"name": "soma"},
+            "field": "Vclamp",
+            "data": [
+                [ 0.001, -70.000]
+            ]
+        },
+        {
+            "timeUnits": "sec",
+            "quantityUnits": "uM",
+            "entity": {"name": "CaInput"},
+            "field": "conc",
+            "data": [
+                [ 0, 0.08],
+                [1.0000, 50.000],
+                [1.0020, 0.080],
+                [1.3000, 50.000],
+                [1.3020, 0.080],
+                [1.3200, 50.000],
+                [1.3220, 0.080],
+                [1.3400, 50.000],
+                [1.3420, 0.080],
+                [1.3600, 50.000],
+                [1.3620, 0.080],
+                [1.3800, 50.000],
+                [1.3820, 0.080],
+                [1.4000, 50.000],
+                [1.4020, 0.080],
+                [1.4200, 50.000],
+                [1.4220, 0.080],
+                [1.4400, 50.000],
+                [1.4420, 0.080]
+            ]
+        }
+    ],  
+    "Readouts": {
+        "timeUnits": "sec",
+        "quantityUnits": "ratio",
+        "entity": {"name": "vclamp"},
+        "field": "current",
+        "window": {"startt": -0.015, "endt": 0.01, "dt": 0.001,
+            "operation": "oscVal", "baseline": "max"
+        },
+        "normalization": {
+            "entity": {"name": "vclamp"},
+            "sampling": "min"
+        },
+        "data": [
+            [1.0170, 0.7358, 0],
+            [1.3061, -0.0000, 0],
+            [1.3169, 0.8776, 0],
+            [1.3276, 0.4670, 0],
+            [1.3352, 1.0000, 0],
+            [1.3481, 0.6473, 0],
+            [1.3543, 0.9023, 0],
+            [1.3633, 0.6095, 0],
+            [1.3700, 0.7239, 0],
+            [1.3882, 0.4806, 0],
+            [1.3944, 0.6631, 0],
+            [1.4064, 0.4668, 0],
+            [1.4136, 0.5897, 0],
+            [1.4292, 0.3990, 0],
+            [1.4367, 0.5320, 0],
+            [1.4492, 0.3226, 0],
+            [1.4567, 0.4397, 0]
+        ]
+  }
+}

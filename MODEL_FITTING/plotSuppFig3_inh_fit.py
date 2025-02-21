@@ -13,6 +13,7 @@ def doPlot( dataset, idx, panel, freq, doProb = False ):
     cell = dataset.split("_")[0]
     exc = "Exc" if dataset.split("_")[1] == "1" else "Inh"
     if not os.path.isfile("Expts/fs_{0}_{1}_pk.json".format(dataset,freq)):
+        print( "Could not find ", "Expts/fs_{0}_{1}_pk.json".format(dataset,freq))
         return
     ax = plt.subplot( 3, 2, idx )
     ax.text( -0.10, 1.05, panel, fontsize = 22, weight = "bold", 
@@ -21,9 +22,9 @@ def doPlot( dataset, idx, panel, freq, doProb = False ):
         score, elapsedTime, diagnostics = findSim.innerMain( 
             #"ExptFilesForFigure/fs_7492_1_5_49_{}_pk.json".format( freq ), 
             #modelFile = "ResultsForFigure/opt7492_1_5_49.g", 
-            "Expts/fs_{}_prob.json".format( dataset ),
+            "Expts/fs_{}_prob.json".format( dataset, freq ),
             modelFile = "Models/{}_vclamp{}.py".format( exc, cell ), 
-            chemFile = "Results/opt{}.g".format( dataset ), 
+            chemFile = "Models/BothPresyn86.g",
             mapFile = "Maps/mapPresyn{}.json".format( exc ),
             bigFont = True, labelPos = "upper left", deferPlot = True )
         ex = np.array( diagnostics["exptX"] )
@@ -39,7 +40,7 @@ def doPlot( dataset, idx, panel, freq, doProb = False ):
             #modelFile = "ResultsForFigure/opt7492_1_5_49.g", 
             "Expts/fs_{0}_{1}_pk.json".format( dataset, freq), 
             modelFile = "Models/{}_vclamp{}.py".format( exc, cell ), 
-            chemFile = "Results/opt{}.g".format( dataset ), 
+            chemFile = "Models/BothPresyn86.g",
             mapFile = "Maps/mapPresyn{}.json".format( exc ),
             bigFont = True, labelPos = "upper left", deferPlot = True )
         ex = np.array( diagnostics["exptX"] )
@@ -87,27 +88,27 @@ def doScoreHisto( ax ):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.legend( fontsize = 14, frameon = False )
-    ax.text( -0.10, 1.05, "G", fontsize = 22, weight = "bold",
+    ax.text( -0.10, 1.05, "F", fontsize = 22, weight = "bold",
         transform=ax.transAxes )
 
 
 def main():
-    #for cell in ["7492", "7491", "1621"]:
+    for cell in ["7492"]:
     #for cell in ["1931", "1524", "1522", "1621", "111", "7491"]:
-    for cell in ["7492", "1491", "6301", "6201", "1541", "1531"]:
+    #for cell in ["7492", "1621", "1491", "6301", "6201", "1541", "1531"]:
         #for exc in ["0", "1"]:
-        for exc in ["1",]:
-            for pat in [ "5_46", "5_47", "5_48", "5_49", "5_50", "15_52", "15_53", "15_55"]: 
+        for exc in ["0",]:
+            for pat in [ "15"]: 
 
                 dataset = "{}_{}_{}".format( cell, exc, pat )
                 fig = plt.figure( figsize = (10, 12), facecolor = "white" )
                 fig.suptitle( dataset )
-                doPlot( dataset, 1, "B", 20 )
+                doPlot( dataset, 1, "A", 20 )
                 if cell not in ["7491", "1931"]:
-                    doPlot( dataset, 2, "C", 30 )
-                    doPlot( dataset, 3, "D", 40 )
-                doPlot( dataset, 4, "E", 50 )
-                doPlot( dataset, 5, "F", 50, doProb = True )
+                    doPlot( dataset, 2, "B", 30 )
+                    doPlot( dataset, 3, "C", 40 )
+                doPlot( dataset, 4, "D", 50 )
+                doPlot( dataset, 5, "E", 20, doProb = True )
                 ax = plt.subplot( 3,2,6 )
                 doScoreHisto(ax)
                 plt.show()
