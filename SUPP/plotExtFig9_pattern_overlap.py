@@ -325,6 +325,7 @@ def generatePatterns( args ):
     print( "\nEven out CA3_Inter::" )
     evenOutConnectivity( CA3_Inter, px, patternDict2 )
     estimateOverlap()
+    quit()
 
 class MooArg:
     def __init__( self, title, field ):
@@ -468,6 +469,7 @@ def estimateOverlap():
     gluVec = []
     gabaVec = []
     for key, pd in patternDict2.items():
+        print( "NUM SQUARES: ", key, sum( pd.flatten() ) )
         gluVec.append((np.matmul( CA3_CA1, pd ) >= thresh_CA3_CA1 ) * 1)
         Inter = (np.matmul( CA3_Inter, pd) >= thresh_CA3_Inter ) * 1.0
         gabaVec.append((np.matmul( Inter_CA1, Inter ) >= thresh_Inter_CA1) *1)
@@ -624,7 +626,7 @@ def runSession( args, whichArg ):
     ret = []
     data = []
     argdict = vars( args )
-    for freq in [8, 20, 50]:
+    for freq in [8]:
         ReducedPulseIdx = updatePulseTrain( freq )
         for ii in range( args.numRepeats ):
             argdict["repeatIdx"] = ii
@@ -674,43 +676,6 @@ def main():
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )
     args = parser.parse_args()
     runSession( args, "orig" )
-
-    orig = args.wtGlu
-    for args.wtGlu in [0.1, 0.2, 1, 5, 10]:
-        runSession( args, "wtGlu" )
-    args.wtGlu = orig
-
-    orig = args.wtGABA
-    for args.wtGABA in [1, 2, 10, 20]:
-        runSession( args, "wtGABA" )
-    args.wtGABA = orig
-
-    orig = args.pCA3_CA1
-    for args.pCA3_CA1 in [0.005, 0.01, 0.05, 0.10]:
-        runSession( args, "pCA3_CA1" )
-    args.pCA3_CA1 = orig
-
-    orig = args.pCA3_Inter
-    for args.pCA3_Inter in [0.002, 0.005, 0.02, 0.05]:
-        runSession( args, "pCA3_Inter" )
-    args.pCA3_Inter = orig
-
-    orig = args.pInter_CA1
-    for args.pInter_CA1 in [0.002, 0.005, 0.02, 0.05]:
-        runSession( args, "pInter_CA1" )
-    args.pInter_CA1 = orig
-
-    orig = args.zeroIndices
-    for args.zeroIndices in [64, 96, 128, 224]:
-        runSession( args, "zeroIndices" )
-    args.zeroIndices = orig
-
-    '''
-    orig = args.ChR2_ampl
-    for args.ChR2_ampl in [0.02, 0.05, 0.2, 0.5]:
-        runSession( args, "ChR2_ampl" )
-    args.ChR2_ampl = orig
-    '''
 
     
 if __name__ == "__main__":
