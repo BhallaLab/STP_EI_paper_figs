@@ -20,12 +20,12 @@ from eidynamics import pattern_index
 # make a colour map viridis
 viridis = mpl.colormaps["viridis"]
 cividis = mpl.colormaps["cividis"]
-flare   = mpl.colormaps["flare_r"] # to assign bright color lumosity for higher values
-crest   = mpl.colormaps["crest_r"] # to assign bright color lumosity for higher values
+flare   = mpl.colormaps["rocket"] # to assign bright color lumosity for higher values
+crest   = mpl.colormaps["mako"] # to assign bright color lumosity for higher values
 magma   = mpl.colormaps["magma"]
 
-color_E             = "flare_r"
-color_I             = "crest_r"
+color_E             = "rocket"
+color_I             = "mako"
 color_freq          = {1:magma(0.05), 5:magma(0.1), 10:magma(0.2), 20:magma(.4), 30:magma(.5), 40:magma(.6), 50:magma(.7), 100:magma(.9)}
 color_squares       = {1:viridis(0.2), 5:viridis(.4), 7:viridis(.6), 15:viridis(.8), 20:viridis(1.0)}
 color_squares_EI    = {-70: {1:flare(0.2), 5:flare(.4), 7:flare(.6), 15:flare(.8), 20:flare(1.0)}, 

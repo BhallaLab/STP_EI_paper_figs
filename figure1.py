@@ -15,6 +15,7 @@ import pandas               as pd
 
 from scipy.stats   import kruskal, wilcoxon, mannwhitneyu, ranksums
 from scipy.optimize import curve_fit
+from scipy.signal  import find_peaks
 from scipy.stats import linregress
 
 from PIL            import Image
@@ -34,13 +35,13 @@ mpl.rcParams['lines.linewidth'] = 2
 # make a colour map viridis
 viridis = mpl.colormaps["viridis"]
 cividis = mpl.colormaps["cividis"]
-flare   = mpl.colormaps["flare"]
-crest   = mpl.colormaps["crest"]
+flare   = mpl.colormaps["rocket"]
+crest   = mpl.colormaps["mako"]
 magma   = mpl.colormaps["magma"]
 edge    = mpl.colormaps['edge']
 
-color_E             = "flare"
-color_I             = "crest"
+color_E             = "rocket"
+color_I             = "mako"
 color_freq          = {1:magma(0.05), 5:magma(0.1), 8:magma(0.15), 10:magma(0.2), 20:magma(.4), 30:magma(.5), 40:magma(.6), 50:magma(.7), 100:magma(.9)}
 color_squares       = {1:viridis(0.2), 5:viridis(.4), 7:viridis(.6), 15:viridis(.8), 20:viridis(1.0)}
 color_squares_EI    = {-70: {1:flare(0.2), 5:flare(.4), 7:flare(.6), 15:flare(.8), 20:flare(1.0)}, 
@@ -50,13 +51,17 @@ Fs = 2e4
 
 freq_sweep_pulses = np.arange(9)
 
+# load datapaths
+from datapaths import location
+
 # Load Data -----------------------------------------------------------------------------------------------
-figure_raw_material_location = Path(r"\\storage.ncbs.res.in\adityaa\Lab\Projects\EI_Dynamics\Analysis\paper_figures\submission")
-paper_figure_export_location = Path(r"\\storage.ncbs.res.in\adityaa\Lab\Projects\EI_Dynamics\Analysis\paper_figures\submission")
-data_path_FS                 = Path(r"\\storage.ncbs.res.in\adityaa\Lab\Projects\EI_Dynamics\Analysis\parsed_data\Jan_2025\FreqSweep")
-data_path_LTM                = Path(r"\\storage.ncbs.res.in\adityaa\Lab\Projects\EI_Dynamics\Analysis\parsed_data\Jan_2025\LTMRand")
-data_path_grid               = Path(r"\\storage.ncbs.res.in\adityaa\Lab\Projects\EI_Dynamics\Analysis\parsed_data\Jan_2025\Grid")
-data_path_analysed           = Path(r"\\storage.ncbs.res.in\adityaa\Lab\Projects\EI_Dynamics\Analysis\parsed_data\Jan_2025\second_order")
+figure_raw_material_location = location["figure_raw_material_location"]
+paper_figure_export_location = location["paper_figure_export_location"]
+data_path_FS                 = location["data_path_FS"]
+data_path_LTM                = location["data_path_LTM"]
+data_path_grid               = location["data_path_grid"]
+data_path_analysed           = location["data_path_analysed"]
+project_path_root            = location["project_path_root"]
 
 # short data path that contains the kernel fit data for FreqSweep protocol, also contains the field p2p data. latest and checked. Use this for all freqsweep measurements.
 # Contains screening parameters also.
@@ -353,6 +358,9 @@ def main():
     results = linregress(dftemp1['pulse_index'], dftemp1['peaks_field_norm'])
     # # add r2 and p value to the plot as text annotation
     ax1j.text(0.05, 0.76, fr"y  = {results.slope:.2f}x + {results.intercept:.2f},  $r^2 = {results.rvalue**2:.2f}$ , p <<< 0.001", transform=ax1j.transAxes, fontsize=12)
+    # add horizontal line at y=1
+    ax1j.axhline(y=1, color='black', linestyle='--', linewidth=0.5)
+
 
     # try an exponential decay function
     # def exp_decay(x, a, tau):
@@ -448,15 +456,24 @@ def main():
     celldataI = xc_FS_longdf_slice[ (xc_FS_longdf_slice['clampMode']=='VC') & (xc_FS_longdf_slice['cellID']==sample_cell) & (xc_FS_longdf_slice['clampPotential']==  0) & (xc_FS_longdf_slice['stimFreq']==20) & (xc_FS_longdf_slice['numSq']==15)]
     time = np.linspace(0,1,20000)
     for i in range(celldataE.shape[0]):
-        ax1m.plot(time, celldataE.iloc[i,49:20049], color=color_EI[-70], linewidth=0.2, alpha=0.5)
-        ax1m.plot(time, celldataI.iloc[i,49:20049], color=color_EI[0], linewidth=0.2, alpha=0.5)
+        ax1m.plot(time, celldataE.iloc[i,49:20049], color=color_EI[-70], linewidth=0.4, alpha=0.5)
+        ax1m.plot(time, celldataI.iloc[i,49:20049], color=color_EI[0], linewidth=0.4, alpha=0.5)
+    ax1m.legend([],[], frameon=False) # legend removed to save space
     # plot mean
-    ax1m.plot(time, celldataE.iloc[:,49:20049].mean(axis=0), color=color_EI[-70], linewidth=1.5, alpha=0.8, label='EPSC')
-    ax1m.plot(time, celldataI.iloc[:,49:20049].mean(axis=0), color=color_EI[0], linewidth=1.5, alpha=0.8, label='IPSC')
+    ax1m.plot(time, celldataE.iloc[:,49:20049].mean(axis=0), color=color_EI[-70], linewidth=2, label='EPSC')
+    ax1m.plot(time, celldataI.iloc[:,49:20049].mean(axis=0), color=color_EI[0],   linewidth=2, label='IPSC')
     # set legend inside the plot
-    ax1m.legend(loc='upper right', bbox_to_anchor=(0.9, 0.9), frameon=True) # legend removed to save space
-    # remove legend
-    ax1m.legend(loc='upper right', frameon=False)
+    ax1m.legend(loc='upper right', bbox_to_anchor=(0.9, 0.9), frameon=True)
+    
+    # draw envelope
+    signal = -1*celldataE.iloc[:,49:20049].mean(axis=0)
+    peaks = find_peaks(signal, distance=900, height=30)[0]
+    ax1m.plot(time[peaks], -1*signal[peaks], 'r-')
+
+    signal = celldataI.iloc[:,49:20049].mean(axis=0)
+    peaks = find_peaks(signal, distance=900, height=30)[0]
+    ax1m.plot(time[peaks], signal[peaks], 'g-')
+    
     # add a floating scalebar
     sns.despine(ax=ax1m, left=True, right=True, top=True, bottom=True)
     # remove ticks
@@ -487,7 +504,7 @@ def extended_data_figure():
     # Fig 1A: Slice, polygon projection, and recording electrodes
     Fig1A_hr, ax1A_hr = plt.subplots(1, 1, figsize=(10, 5), constrained_layout=True)
     ax1A_hr.text(-0.1, 1.1, 'A', transform=ax1A_hr.transAxes, size=20, weight='bold')
-    image1_path = all_cells.project_path_root / r"Lab\Projects\EI_Dynamics\Analysis\paper_figure_matter\slice_electrode_expression_cropped_with_scalebar_blue_polygon.png"
+    image1_path = paper_figure_export_location / r"slice_electrode_expression_cropped_with_scalebar_blue_polygon.png"
     im1 = Image.open(image1_path)
     # get the size of the image
     im1_width, im1_height = im1.size
@@ -510,7 +527,7 @@ def extended_data_figure():
     # Fig 1B: Grid Pattern in Space overlaid on CA3 slice at 40x
     Fig1B_hr, ax1B_hr = plt.subplots(1, 1, figsize=(10, 5), constrained_layout=True)
     ax1B_hr.text(-0.1, 1.1, 'B', transform=ax1B_hr.transAxes, size=20, weight='bold')
-    image2_path = all_cells.project_path_root / r'Lab\Projects\EI_Dynamics\Analysis\paper_figure_matter\CA3-polygonFrame_figure_with_cellboundaries.png'
+    image2_path = paper_figure_export_location / r'CA3-polygonFrame_figure_with_cellboundaries.png'
     im2 = Image.open(image2_path)
     im2_width, im2_height = im2.size
     # ax1B_hr.imshow(im2)
@@ -537,7 +554,7 @@ def extended_data_figure():
 
     ax1s1.invert_yaxis()
     # import heatmap data
-    df_CA3_heatmap = pd.read_hdf(r"parsed_data\second_order\CA3_recording_3161_grid_response_pivot.h5")
+    df_CA3_heatmap = pd.read_hdf(data_path_analysed / r"CA3_recording_3161_grid_response_pivot.h5")
     grid_aspect_ratio = pattern_index.polygon_frame_properties['aspect_ratio']
     h = 8
     w = grid_aspect_ratio*h

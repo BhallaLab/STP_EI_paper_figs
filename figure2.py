@@ -28,13 +28,13 @@ plt.rcParams['svg.fonttype'] = 'none'
 
 # make a colour map viridis
 viridis = mpl.colormaps["viridis"]
-flare   = mpl.colormaps["flare"]
-crest   = mpl.colormaps["crest"]
+flare   = mpl.colormaps["rocket"]
+crest   = mpl.colormaps["mako"]
 magma   = mpl.colormaps["magma"]
 edge    = mpl.colormaps['edge']
 
-color_E = "flare"
-color_I = "crest"
+color_E             = "rocket"
+color_I             = "mako"
 color_freq = {1:magma(0.05), 5:magma(0.1), 10:magma(0.2), 20:magma(.4), 30:magma(.5), 40:magma(.6), 50:magma(.7), 100:magma(.9)}
 color_squares = color_squares = {1:viridis(0.2), 5:viridis(.4), 7:viridis(.6), 15:viridis(.8), 20:viridis(1.0)}
 color_EI = {-70:flare(0), 0:crest(0)}
@@ -43,18 +43,17 @@ colors_EI = {-70:flare, 0:crest}
 Fs = 2e4
 freq_sweep_pulses = np.arange(9)
 
+# load datapaths
+from datapaths import location
 
-# Load data -----------------------------------------------------------------------------------------------
-figure_raw_material_location = Path(r"\\storage.ncbs.res.in\adityaa\Lab\Projects\EI_Dynamics\Analysis\paper_figure_matter")
-paper_figure_export_location = Path(r"\\storage.ncbs.res.in\adityaa\Lab\Projects\EI_Dynamics\Analysis\paper_figures\submission")
-data_path_FS                 = Path(r"\\storage.ncbs.res.in\adityaa\Lab\Projects\EI_Dynamics\Analysis\parsed_data\Jan_2025\FreqSweep")
-data_path_grid               = Path(r"\\storage.ncbs.res.in\adityaa\Lab\Projects\EI_Dynamics\Analysis\parsed_data\Jan_2025\Grid")
-data_path_analysed           = Path(r"\\storage.ncbs.res.in\adityaa\Lab\Projects\EI_Dynamics\Analysis\parsed_data\Jan_2025\second_order")
-
-VC_FS_shortdf_withkernelfit_datapath = data_path_FS / "all_cells_FreqSweep_VC_kernelfit_response_measurements.h5"
-vc_FS_shortdf = pd.read_hdf(r"parsed_data\FreqSweep\all_cells_FreqSweep_VC_short.h5", key='data')
-cc_FS_shortdf = pd.read_hdf(r"parsed_data\FreqSweep\all_cells_FreqSweep_CC_short.h5", key='data')
-print(vc_FS_shortdf.shape, cc_FS_shortdf.shape)
+# Load Data -----------------------------------------------------------------------------------------------
+figure_raw_material_location = location["figure_raw_material_location"]
+paper_figure_export_location = location["paper_figure_export_location"]
+data_path_FS                 = location["data_path_FS"]
+data_path_LTM                = location["data_path_LTM"]
+data_path_grid               = location["data_path_grid"]
+data_path_analysed           = location["data_path_analysed"]
+project_path_root            = location["project_path_root"]
 
 # September 2024
 # short data path that contains the kernel fit data for FreqSweep protocol, also contains the field p2p data. latest and checked. Use this for all freqsweep measurements.
@@ -300,6 +299,7 @@ def main():
 
     dftemp = xc_FS_shortdf_slice[(xc_FS_shortdf_slice['clampMode']=='VC')]
     f,a = plot_tools.plot_response_heatmaps(dftemp[dftemp['clampPotential']==0], feature='normPSC_', Fig=subfigsE2, figlabels=['iii', 'iv'], clampMode='VC', annot=False, cbar_limits=[0,1.5])
+    a[0][1].text(-0.1, 1.1, 'F', transform=a[0][1].transAxes, fontsize=24, fontweight='bold', va='top', ha='right')
     a[0][-1].set_label('Normalized IPSC', rotation=90, labelpad=10)
     a[1][-1].set_label('Normalized IPSC', rotation=90, labelpad=10)
 

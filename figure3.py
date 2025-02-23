@@ -25,14 +25,14 @@ mpl.rcParams['lines.linewidth'] = 2
 
 # make a colour map viridis
 viridis = mpl.colormaps["viridis"]
-flare   = mpl.colormaps["flare_r"]
-crest   = mpl.colormaps["crest_r"]
+flare   = mpl.colormaps["rocket"]
+crest   = mpl.colormaps["mako"]
 magma   = mpl.colormaps["magma"]
 edge    = mpl.colormaps['edge']
 rocket_r    = mpl.colormaps['rocket_r']
 
-color_E = flare
-color_I = crest
+color_E             = "rocket"
+color_I             = "mako"
 color_freq = {1:magma(0.05), 5:magma(0.1), 10:magma(0.2), 20:magma(.4), 30:magma(.5), 40:magma(.6), 50:magma(.7), 100:magma(.9)}
 color_squares = {1:viridis(0.2), 5:viridis(.4), 7:viridis(.6), 15:viridis(.8), 20:viridis(1.0)}
 color_squares_r = {1:rocket_r(0.2), 5:rocket_r(.4), 7:rocket_r(.6), 15:rocket_r(.8), 20:rocket_r(1.0)}
@@ -49,13 +49,16 @@ def nosdn(expected, m):
     return m * expected
 
 
-### Data locations
-figure_raw_material_location = Path(r"\\storage.ncbs.res.in\adityaa\Lab\Projects\EI_Dynamics\Analysis\paper_figure_matter")
-paper_figure_export_location = Path(r"\\storage.ncbs.res.in\adityaa\Lab\Projects\EI_Dynamics\Analysis\paper_figures\submission")
-data_path_FS                 = Path(r"\\storage.ncbs.res.in\adityaa\Lab\Projects\EI_Dynamics\Analysis\parsed_data\Jan_2025\FreqSweep")
-data_path_LTM                = Path(r"\\storage.ncbs.res.in\adityaa\Lab\Projects\EI_Dynamics\Analysis\parsed_data\Jan_2025\LTMRand")
-data_path_grid               = Path(r"\\storage.ncbs.res.in\adityaa\Lab\Projects\EI_Dynamics\Analysis\parsed_data\Jan_2025\Grid")
-data_path_analysed           = Path(r"\\storage.ncbs.res.in\adityaa\Lab\Projects\EI_Dynamics\Analysis\parsed_data\Jan_2025\second_order")
+# load datapaths
+from datapaths import location
+
+# Load Data -----------------------------------------------------------------------------------------------
+figure_raw_material_location = location["figure_raw_material_location"]
+paper_figure_export_location = location["paper_figure_export_location"]
+data_path_FS                 = location["data_path_FS"]
+data_path_LTM                = location["data_path_LTM"]
+data_path_grid               = location["data_path_grid"]
+data_path_analysed           = location["data_path_analysed"]
 
 
 ### Load the CC data and screen
@@ -505,7 +508,7 @@ def main():
     slopepivot = x.pivot(index='stimFreq', columns='pulse', values='slope')
     slopepivot_n = n.pivot(index='stimFreq', columns='pulse', values='slope')
     ax3['G'], _, _, _, _ = plot_tools.ax_to_partial_dist_heatmap_ax(gammapivot, gammapivot_n, Fig3, ax3['G'], barw=0.03, pad=0.01, shrink=0.8, palette='Purples_r', minmax=[0,12], force_vmin_to_zero=True, annotate=False)
-    ax3['G'].text( -0.1, 1.05, 'G', fontweight='bold', fontsize=20, ha='center', transform=ax3['G'].transAxes)
+    ax3['G'].text( -0.1, 1.27, 'G', fontweight='bold', fontsize=20, ha='center', transform=ax3['G'].transAxes)
 
     # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     for a in ax3.keys():
@@ -564,7 +567,7 @@ def extended_figure2():
     sns.despine(ax=ax3['d'], top=True, right=True, offset=10, trim=True)
 
     ax3['g'].text(-0.1, 1.05, 'g', fontweight='bold', fontsize=16, ha='center', transform=ax3['g'].transAxes)
-    sns.pointplot(data=ebyi_df_norm_filt, x='pulse', y='EbyI', ax=ax3['g'], hue='stimFreq', palette=color_freq, errorbar='ci',)
+    sns.pointplot(data=ebyi_df_norm, x='pulse', y='EbyI', ax=ax3['g'], hue='stimFreq', palette=color_freq, errorbar='ci',)
     # ax3['g'].set_ylim([0, 5])
     ax3['g'].set_yticks(np.arange(0,5.1,1))
     ax3['g'].set_ylabel('E / I', fontsize=12)
@@ -670,7 +673,7 @@ def extended_figure2():
     sns.despine(ax=ax3['m'], top=True, right=True, offset=10, trim=True)
 
     ax3['p'].text(-0.1, 1.05, 'p', fontweight='bold', fontsize=16, ha='center', transform=ax3['p'].transAxes)
-    sns.pointplot(data=ebyi_df_norm_filt, x='pulse', y='EbyI', ax=ax3['p'], hue='numSq', palette=color_squares, errorbar='ci',)
+    sns.pointplot(data=ebyi_df_norm, x='pulse', y='EbyI', ax=ax3['p'], hue='numSq', palette=color_squares, errorbar='ci',)
     # ax3['p'].set_ylim([0, 5])
     ax3['p'].set_yticks(np.arange(0,5.1,1))
     ax3['p'].set_ylabel('E / I', fontsize=12)
