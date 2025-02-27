@@ -26,9 +26,12 @@ entire model specification, figure generation, and data analysis code.
 ## Dependencies
 
 All the code here uses **Python** version 3.10.
-All the simulation code uses **MOOSE** version 4.1.0 Jhangri
-The model optimization code also depends on  **HOSS** and **FindSim** 
-Some of the MOOSE graphics depends on the 3-D rendering package **vpython**
+
+All the simulation code uses **MOOSE** version 4.1.0 Jhangri.
+
+The model optimization code also depends on  **HOSS** and **FindSim** .
+
+Some of the MOOSE graphics depends on the 3-D rendering package **vpython**.
 
 [MOOSE](https://github.com/BhallaLab/moose-core) is the Multiscale Object 
 Oriented

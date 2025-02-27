@@ -193,7 +193,7 @@ def panelCK_SampleTrace( ax, dcell, panel, title ):
     ax.set_xlim( -0.02, 0.82 )
     ax.text( 0.1, 1.05, title, fontsize = 14, transform=ax.transAxes )
 
-def panelPQ_ThetaSampleTrace( ax, dcell, panel, title ):
+def panelPQRS_ThetaSampleTrace( ax, dcell, panel, title ):
     print( "PANEL = ", panel )
     df = dcell.loc[(dcell['stimFreq'] == 100)]
     time, rate = rippleSpikeRate( df, spikeCriterion=-0.03, windowSize = 0.005 )
@@ -223,7 +223,9 @@ def main():
                 "SURP43_uniform_pattern/fixwt_unif_orig_0.h5",
                 "SURP44_rand_pattern/fixwt_rand_orig_0.h5",
                 "SURP46_theta_pat/fixwt_theta_pat_orig_0.h5",
-                "SURP47_theta_uniform/fixwt_theta_unif_orig_0.h5"
+                "SURP47_theta_uniform/fixwt_theta_unif_orig_0.h5",
+                "SURP50_theta_gamma_precess/prec_precession_13.h5",
+                "SURP50_theta_gamma_precess/prec_precession_12.h5"
     ]
 
     titles = [  
@@ -238,13 +240,15 @@ def main():
                 "No GABA",
                 "Uniform pattern",
                 "Random pattern",
-                "Theta ripple changing",
-                "Theta ripple uniform"
+                "Theta burst mismatch",
+                "Theta burst uniform",
+                "Theta burst no precess",
+                "Theta burst precess"
     ]
 
     plt.rcParams.update( {"font.size": 20} )
     fig = plt.figure( figsize = (12,17) )
-    gs = fig.add_gridspec( 8, 2 ) # 6 rows, 2 cols
+    gs = fig.add_gridspec( 8, 2 ) # 8 rows, 2 cols
     ax = fig.add_subplot( gs[0,:] ) # Do a timeseries voltage plot
     panelA_Vm( ax, fnames[0] )
     ax = fig.add_subplot( gs[1,:] ) # Do a raster plot.
@@ -259,8 +263,8 @@ def main():
         ax = fig.add_subplot( gs[3+idx//2,idx%2] )
         panelCK_SampleTrace( ax, df, panel, titles[idx+1] )
 
-    fig2 = plt.figure( figsize = (11.65, 5) )
-    gs = fig2.add_gridspec( 2, 2 ) # 2 rows, 2 cols
+    fig2 = plt.figure( figsize = (11.65, 8) )
+    gs = fig2.add_gridspec( 3, 2 ) # 3 rows, 2 cols
     ax = fig2.add_subplot( gs[0,0] ) # Do freq plot
     panelN_Freq( ax )
     ax = fig2.add_subplot( gs[0,1] ) # Do schematic
@@ -269,8 +273,8 @@ def main():
         print( "loading: ", fname )
         panel = chr( ord("P") + idx )
         df = pandas.read_hdf( fname )
-        ax = fig2.add_subplot( gs[1,idx] )
-        panelPQ_ThetaSampleTrace( ax, df, panel, titles[idx+11] )
+        ax = fig2.add_subplot( gs[1 + idx//2,idx%2] )
+        panelPQRS_ThetaSampleTrace( ax, df, panel, titles[idx+11] )
 
 
     fig.tight_layout()
