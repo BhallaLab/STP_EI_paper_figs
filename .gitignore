@@ -4,3 +4,5 @@
 *.odg
 *.h5
 *.swp
+*pycache*
+*.pyc
