@@ -207,7 +207,7 @@ def panelO( ax, ie, ii, f ):
     ax.spines['right'].set_visible(False)
     ax.set_ylabel( "Gmax (nS)" )
     ax.set_xlabel( "Burst Freq (Hz)" )
-    ax.set_ylim( 0, 0.66 )
+    ax.set_ylim( 0, 0.8 )
     ax.legend( loc = "upper left", frameon = False, fontsize = 14 )
     ax.text( -0.28, 1.05, "O", fontsize = 22, weight = "bold", transform=ax.transAxes )
 
