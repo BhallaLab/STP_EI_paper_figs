@@ -24,7 +24,7 @@ gluR_clamp_potl = "-0.07"
 GABAR_clamp_potl = "0.0"
 GABAR_clamp_offset = 0.1    # nA
 gluConductanceScale = 2   # Relative to default value in the spine proto
-gluTau2Scale = 1   # Relative to default value in the spine proto
+gluTau2Scale = 2   # Relative to default value in the spine proto
 
 numCA1Exc = 100
 numCA1Inh = 200
@@ -60,11 +60,11 @@ patternDict2 = {}
 tauCell = 0.010         # Charging tau through gLeak
 ChR2chanOpenTime = 0.001     # Balances out tauChR2chan
 tauChR2chan = 0.005     # Charging tau through ChR2chan.
-tauChR2recovery = 2.5   # Tau for recovery
-ChR2decrement = 0.0006  # Scaling for decrement
+tauChR2recovery = 1.5   # Tau for recovery
+ChR2decrement = 0.0004  # Scaling for decrement
 ChR2_basal_desensitization = 0.01
 Erest = 0               # Using baseline as zero.
-EChR2 = 30              # Reversal potl in mV relative to baseline.
+EChR2 = 60              # Reversal potl in mV relative to baseline.
 
 def updatePulseTrain( freq ):
     ReducedPulseIdx = np.zeros( round(SAMPLE_TIME / chemDt ), dtype=int )
@@ -393,7 +393,7 @@ def buildModel( args ):
         ],
         # Assign passive properties of the cell.
         passiveDistrib = [
-            ['#', 'CM', '0.01', 'Em', '-0.065', 'RM', '0.2']
+            ['#', 'CM', '0.01', 'Em', '-0.065', 'RM', '1.0']
         ],
         chemDistrib = [
             # Args: chem_model, elec_compts, mesh_type, spatial_distrib, r_scalefactor, radius_sdev
@@ -427,7 +427,7 @@ def buildModel( args ):
         moogList = [
             ['#', '1', '.', 'Vm', 'Cell Vm', -70.0, -60.0],
             ['#', '1', 'glu/Docked', 'n', 'Glu Dock n', 0.0, 20.0],
-            ['#', '1', 'GABA/Docked', 'n', 'GABA Dock n', 0.0, 20.0]
+            ['#', '1', 'GABA/Docked', 'n', 'GABA Dock n', 0.0, 80.0]
         ]
     )
     moose.seed( args.seedStochastic ) 
@@ -502,7 +502,7 @@ def stimFunc( freq, ChR2AmplScale ):
         pd = patternDict2[46 + patternIdx]
         amplIdx = min( len( pd ), int( chr2Ampl * len( pd ) ) )
         #pd = np.where( np.random.rand( len( pd ) ) < chr2Ampl, pd, 0 )
-        pd =  np.append( pd[:amplIdx], np.zeros( len(pd)-amplIdx ) )
+        #pd =  np.append( pd[:amplIdx], np.zeros( len(pd)-amplIdx ) )
 
         Inter = moose.vec( "/model/elec/Inter/soma" )
         Inter.Vm = (np.matmul( CA3_Inter, pd) >= thresh_CA3_Inter ) * 1.0
@@ -572,7 +572,7 @@ def innerMain( args, ReducedPulseIdx ):
     animation += [rd.AnimationEvent( ">", 0.0 )]*8
     animation += [rd.AnimationEvent( "x", 0.001 )] * 2   # Sensitivity
 
-    animation += [rd.AnimationEvent( "$Asopa and Bhalla: Model of optogenetic stimulation\nof CA3->CA1 circuit with stochastic presynaptic STP.", 0.01 )]
+    animation += [rd.AnimationEvent( "$Asopa and Bhalla, NCBS-TIFR, 2025.\n Pattern Mismatch detection in CA3->CA1 via STP and EI imbalance.", 0.01 )]
     animation += [rd.AnimationEvent( "$$", 0.08 )]
     animation += [rd.AnimationEvent( "$This is CA3, which receives optogenetic patterned stimuli", 0.09 )]
     animation += [rd.AnimationEvent( "3", 0.1 )]
@@ -593,13 +593,29 @@ def innerMain( args, ReducedPulseIdx ):
 
     animation += [rd.AnimationEvent( "$This is a ball-and-stick model of the cell.\nIt is activated by CA3 and inhibited by interneurons.", 0.22 )]
     animation += [rd.AnimationEvent( "0", 0.225 )]
+    animation += [rd.AnimationEvent( "1", 0.225 )]
+    animation += [rd.AnimationEvent( "2", 0.225 )]
     animation += [rd.AnimationEvent( "0", 0.23 )]
+    animation += [rd.AnimationEvent( "1", 0.23 )]
+    animation += [rd.AnimationEvent( "2", 0.23 )]
     animation += [rd.AnimationEvent( "0", 0.235 )]
+    animation += [rd.AnimationEvent( "1", 0.235 )]
+    animation += [rd.AnimationEvent( "2", 0.235 )]
     animation += [rd.AnimationEvent( "0", 0.24 )]
+    animation += [rd.AnimationEvent( "1", 0.24 )]
+    animation += [rd.AnimationEvent( "2", 0.24 )]
     animation += [rd.AnimationEvent( "0", 0.245 )]
+    animation += [rd.AnimationEvent( "1", 0.245 )]
+    animation += [rd.AnimationEvent( "2", 0.245 )]
     animation += [rd.AnimationEvent( "0", 0.25 )]
+    animation += [rd.AnimationEvent( "1", 0.25 )]
+    animation += [rd.AnimationEvent( "2", 0.25 )]
     animation += [rd.AnimationEvent( "0", 0.255 )]
+    animation += [rd.AnimationEvent( "1", 0.255 )]
+    animation += [rd.AnimationEvent( "2", 0.255 )]
     animation += [rd.AnimationEvent( "0", 0.26 )]
+    animation += [rd.AnimationEvent( "1", 0.26 )]
+    animation += [rd.AnimationEvent( "2", 0.26 )]
 
     animation += [rd.AnimationEvent( "$  ", 0.27 )]
     animation += [rd.AnimationEvent( "$$", 0.27 )]
@@ -616,48 +632,57 @@ def innerMain( args, ReducedPulseIdx ):
     animation += [rd.AnimationEvent( "1", 0.54 )]
     animation += [rd.AnimationEvent( "1", 0.545 )]
     animation += [rd.AnimationEvent( "1", 0.55 )]
+    #animation += [rd.AnimationEvent( "0", 0.55 )]
 
 
     animation += [rd.AnimationEvent( "$These are GABAergic presynaptic boutons on the dendrite.", 0.55 )]
     animation += [rd.AnimationEvent( "1", 0.55 )]
     animation += [rd.AnimationEvent( "2", 0.55 )]
-    animation += [rd.AnimationEvent( "D", 0.55 )] * 4
+    #animation += [rd.AnimationEvent( "D", 0.55 )] * 4
     animation += [rd.AnimationEvent( "2", 0.555 )]
+    #animation += [rd.AnimationEvent( "0", 0.56 )]
     animation += [rd.AnimationEvent( "2", 0.56 )]
     animation += [rd.AnimationEvent( "2", 0.565 )]
     animation += [rd.AnimationEvent( "2", 0.57 )]
     animation += [rd.AnimationEvent( "2", 0.575 )]
     animation += [rd.AnimationEvent( "2", 0.58 )]
 
-    animation += [rd.AnimationEvent( "$$", 0.61 )]
-    animation += [rd.AnimationEvent( "1", 0.615 )]
-    animation += [rd.AnimationEvent( "0", 0.615 )]
+    animation += [rd.AnimationEvent( "0", 0.59 )]
+    animation += [rd.AnimationEvent( "$$", 0.60 )]
+    animation += [rd.AnimationEvent( "1", 0.605 )]
 
-    animation += [rd.AnimationEvent( "$CA3 activity patterns are shaped like the letters ABCD.\nThere are 8 repeats each of four patterns.", 0.62 )]
-    animation += [rd.AnimationEvent( "0", 0.63 )]
-    animation += [rd.AnimationEvent( "2", 0.63 )]
-    animation += [rd.AnimationEvent( "$Glu boutons respond sparsely and undergo depression.", 0.69 )]
-    animation += [rd.AnimationEvent( "$Glu boutons respond sparsely and undergo depression.\nAt pattern changes fresh boutons turn on strongly.", 0.97 )]
+    animation += [rd.AnimationEvent( "0", 0.62 )]
+    animation += [rd.AnimationEvent( "$CA3 activity patterns are shaped like the letters ABCD.\nThere are 8 repeats each of four patterns.", 0.625 )]
+    #animation += [rd.AnimationEvent( "2", 0.63 )]
+    animation += [rd.AnimationEvent( "$Glu and GABA boutons both undergo depression.", 0.69 )]
+    #animation += [rd.AnimationEvent( "2", 0.80 )]
+    animation += [rd.AnimationEvent( "$Pattern Change.", 0.835 )]
+    animation += [rd.AnimationEvent( "$  ", 0.845 )]
+    animation += [rd.AnimationEvent( "$$", 0.845 )]
+    animation += [rd.AnimationEvent( "$Pattern Change.", 0.98 )]
+    animation += [rd.AnimationEvent( "$At pattern changes fresh Glu boutons turn on strongly.\nDue to large overlap, GABA boutons remain depressed", 1.0 )]
+    animation += [rd.AnimationEvent( "$Pattern Change.", 1.145 )]
+    animation += [rd.AnimationEvent( "$  ", 1.155 )]
+    animation += [rd.AnimationEvent( "$$", 1.155 )]
 
-    animation += [rd.AnimationEvent( "$  ", 1.2 )]
-    animation += [rd.AnimationEvent( "$$", 1.2 )]
-    animation += [rd.AnimationEvent( "2", 1.2 )]
-    animation += [rd.AnimationEvent( "0", 1.2 )]
-    animation += [rd.AnimationEvent( "4", 1.2 )]
-    for tt in np.arange( 1.2, 1.3, 0.0005 ):
+    animation += [rd.AnimationEvent( "2", 1.23 )]
+    animation += [rd.AnimationEvent( "0", 1.23 )]
+    animation += [rd.AnimationEvent( "4", 1.23 )]
+    for tt in np.arange( 1.23, 1.33, 0.0005 ):
         animation.append( rd.AnimationEvent( "r", tt ) )
         animation.append( rd.AnimationEvent( "<", tt ) )
     animation += [rd.AnimationEvent( "X", 0.001 )] # Sensitivity
-    for tt in np.arange( 1.3, 1.4, 0.0005 ):
+    animation += [rd.AnimationEvent( "$Asopa and Bhalla, NCBS-TIFR, 2025.\n Pattern Mismatch detection in CA3->CA1 via STP and EI imbalance.", 1.33 )]
+    for tt in np.arange( 1.33, 1.43, 0.0005 ):
         animation.append( rd.AnimationEvent( "r", tt ) )
         animation.append( rd.AnimationEvent( "<", tt ) )
     animation += [rd.AnimationEvent( "X", 0.001 )] # Sensitivity
-    for tt in np.arange( 1.4, 1.6, 0.0005 ):
+    for tt in np.arange( 1.43, 1.63, 0.0005 ):
         animation.append( rd.AnimationEvent( "r", tt ) )
         animation.append( rd.AnimationEvent( "<", tt ) )
 
 
-    rdes.displayMoogli( 0.0005, runtime, rotation = 0.00, mergeDisplays=True, colormap = "plasma", animation = animation, movieFrame = [84,157,1110,1068] )
+    rdes.displayMoogli( 0.0005, runtime, rotation = 0.00, mergeDisplays=True, colormap = "plasma", animation = animation, movieFrame = [84,157,940,900] )
 
     moose.delete( "/model" )
     moose.delete( "/library" )
@@ -703,13 +728,13 @@ def main():
     parser.add_argument( "-sc", "--seedConnections", type = int, help = "Optional: Seed to use for random numbers for setting up connections in Python.", default = 1234 )
     parser.add_argument( "-ss", "--seedStochastic", type = int, help = "Optional: Seed to use for random numbers for MOOSE stochastic calculations.", default = 1234 )
     parser.add_argument( "-vglu", "--volGlu", type = float, help = "Optional: Volume scaling factor for Glu synapses. Default=1", default = 1.0 )
-    parser.add_argument( "-wglu", "--wtGlu", type = float, help = "Optional: weight scaling factor for Glu synapses. Default=2", default = 2 )
+    parser.add_argument( "-wglu", "--wtGlu", type = float, help = "Optional: weight scaling factor for Glu synapses. Default=0.5", default = 0.5 )
     parser.add_argument( "-vGABA", "--volGABA", type = float, help = "Optional: Volume scaling factor for GABA synapses. Default=0.5", default = 0.5 )
-    parser.add_argument( "-wGABA", "--wtGABA", type = float, help = "Optional: Weight of GABA synapses. Default=50", default = 50 )
-    parser.add_argument( "--pInter_CA1", type = float, help = "Optional: Probability of a given Interneuron connecting to the CA1 cell. Default=0.004 ", default = 0.004 )
+    parser.add_argument( "-wGABA", "--wtGABA", type = float, help = "Optional: Weight of GABA synapses. Default=4", default = 4 )
+    parser.add_argument( "--pInter_CA1", type = float, help = "Optional: Probability of a given Interneuron connecting to the CA1 cell. Default=0.01 ", default = 0.01 )
     parser.add_argument( "--pCA3_CA1", type = float, help = "Optional: Probability of a given CA3 cell connecting to the CA1 cell. Default=0.02 ", default = 0.02 )
-    parser.add_argument( "--pCA3_Inter", type = float, help = "Optional: Probability of a given CA3 cell connecting to an interneuron. Default=0.005 ", default = 0.005 )
-    parser.add_argument( "--ChR2_ampl", type = float, help = "Optional: Scale factor for ChR2 stimulus amplitude. Default=0.1.", default = 0.1 )
+    parser.add_argument( "--pCA3_Inter", type = float, help = "Optional: Probability of a given CA3 cell connecting to an interneuron. Default=0.01 ", default = 0.01 )
+    parser.add_argument( "--ChR2_ampl", type = float, help = "Optional: Scale factor for ChR2 stimulus amplitude. Default=1.0", default = 1.0 )
     parser.add_argument( "-z", "--zeroIndices", type = int, help = "Optional: Number of optical inputs to zero out, range 0 to 256. Default=128.", default = 128 )
 
     parser.add_argument( "-o", "--outputFile", type = str, help = "Optional: specify name of output file, in hdf5 format.", default = "simData.h5" )

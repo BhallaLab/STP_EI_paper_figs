@@ -6,3 +6,4 @@
 *.swp
 *pycache*
 *.pyc
+*log*.txt
