@@ -32,6 +32,9 @@ The conversion from a series of pngs to the movie is performed by **ffmpeg**:
 
 	ffmpeg version 4.4.2-0ubuntu0.22.04.1
 
+Conversion has only been tested on Google Chrome, but it ought to work on
+other web browsers. 
+
 [MOOSE](https://github.com/BhallaLab/moose-core) is the Multiscale Object 
 Oriented
 Simulation environment. It is good for running ODE-based signaling models
@@ -49,9 +52,17 @@ the frames are put together into a movie.
 
 `python movie_mismatch_simulation.py`
 
+If the browser window is on a different screen you will need to shift mouse
+focus to that screen till the movie is built. It takes about 3 minutes to
+run the simulation and sample the frames on a laptop with an AMD Ryzen 7 6800HS
+processor.
+
+The movie sampling area is set with the assumption that the browser window 
+is aligned to the upper left of the screen.
+
 To convert the pngs into the mp4: 
 
 `ffmpeg -framerate 30 -i frame_%04d.png -c:v libx264 -pix_fmt yuv420p mismatch_Asopa_and_Bhalla2025.mp4`
 
-
+This takes only a few seconds to generate the mp4.
 
