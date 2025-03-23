@@ -1,9 +1,10 @@
 import matplotlib.pyplot as plt
 import pandas
-#import pylab
+import copy
 import numpy as np
 import math
 import argparse
+import scipy
 from scipy.stats import linregress
 
 freq = 80.0 # Hz
@@ -33,7 +34,8 @@ def rippleSpikeRate( dcell, spikeCriterion = -0.03, windowSize = 0.02 ):
     window = np.ones(int(windowSize * SAMPLE_FREQ ))
     firingRate = np.convolve(sumTrain, window, mode='same') / (windowSize * len( df ) )
 
-    return time, firingRate
+    binSize = int( 0.01 * SAMPLE_FREQ ) # 10 ms bins for this.
+    return time, firingRate, np.sum(sumTrain.reshape(-1, binSize), axis=1)
 
 def spikeRate( dcell, spikeCriterion = -0.03, windowSize = 0.02 ):
     STIM_ON = int( 0.5 * SAMPLE_FREQ ) + SAMPLE_START
@@ -57,7 +59,8 @@ def spikeRate( dcell, spikeCriterion = -0.03, windowSize = 0.02 ):
     # time_points = time[::int(step_size / dt)]
     # firing_rates = firing_rate[::int(step_size / dt)]
     # return time_points, firing_rates
-    return time, firingRate
+    binSize = int( windowSize * SAMPLE_FREQ )
+    return time, firingRate, np.sum(sumTrain.reshape(-1, binSize), axis=1)
 
 ##########################################################################
 ### Here we have functions for the panels for the figurel
@@ -171,13 +174,38 @@ def panelB_raster( ax, fname ):
     ax.set_xlim( -0.02, 0.82 )
     ax.text( -0.07, 1.05, "B", fontsize = 20, weight = "bold", transform=ax.transAxes )
 
+def printStats( title, panel, rate ):
+    # Rate is indexed by bin number. Each bin is 10 ms.
+    pulseWidth = 2
+    # This variant considers 3 pulses before to compare with 3 after.
+    w1 = scipy.stats.mannwhitneyu( rate[5*pulseWidth:8*pulseWidth], 
+            rate[8*pulseWidth:11*pulseWidth], alternative="less" ).pvalue
+    w2 = scipy.stats.mannwhitneyu( rate[13*pulseWidth:16*pulseWidth], 
+            rate[16*pulseWidth:18*pulseWidth], alternative="less" ).pvalue
+    denom = sum(rate[5*pulseWidth:8*pulseWidth]) 
+    r1 = sum(rate[8*pulseWidth:11*pulseWidth])/denom if denom > 0 else -1
+    denom = sum(rate[13*pulseWidth:16*pulseWidth]) 
+    r2 = sum(rate[16*pulseWidth:19*pulseWidth])/denom if denom > 0 else -1
+    denom = sum(rate[21*pulseWidth:24*pulseWidth]) 
+    r3 = sum(rate[24*pulseWidth:27*pulseWidth])/denom if denom > 0 else -1
+    if panel == 'G':
+        w3 = -1
+    else:
+        w3 = scipy.stats.mannwhitneyu( rate[21*pulseWidth:24*pulseWidth], 
+            rate[24*pulseWidth:27*pulseWidth], alternative="less" ).pvalue
+    print( "{} : w1={:12.4g}, w2={:12.4g}, w3={:12.4g} {}".format( panel, w1, w2, w3, title ) )
+    print( "{} : r1={:12.4g}, r2={:12.4g}, r3={:12.4g} {}".format( panel, r1, r2, r3, title ) )
+    print( "{} {}: {},      {}".format( panel, title, rate[6*pulseWidth:8*pulseWidth], rate[8*pulseWidth:10*pulseWidth] ) )
+
+
 def panelCK_SampleTrace( ax, dcell, panel, title ):
     print( "PANEL = ", panel )
     df = dcell.loc[(dcell['stimFreq'] == 50)]
-    time, rate = spikeRate( df, spikeCriterion=-0.03, windowSize = 0.01 )
+    time, rate, binned = spikeRate( df, spikeCriterion=-0.03, windowSize = 0.01 )
     ax.plot( time, rate, "b" )
     if panel not in ['L','M']:
-        ax.scatter( [0.16, 0.32, 0.48],[-5,-5,-5], marker = '^', color='red' )
+        ax.scatter( [0.16, 0.32, 0.48],[-5,-5,-5], marker='^', color='red' )
+        printStats( title, panel, binned )
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     if panel == 'C':
@@ -193,10 +221,33 @@ def panelCK_SampleTrace( ax, dcell, panel, title ):
     ax.set_xlim( -0.02, 0.82 )
     ax.text( 0.1, 1.05, title, fontsize = 14, transform=ax.transAxes )
 
+def printMWUStats( title, panel, rate ):
+    ### Mann-Whitney U test to compare stats for bursts modulated by theta.
+    # Treating each burst as a single sample. Each burst is 50 ms long,
+    # starting at t=50ms and ending at t = 100 ms, then t = 180ms->230ms.
+    # Sampling is 100Hz. So we have 5->10, 18->23, 31->36.
+    # and 44->49
+    # We compare each against the first burst.
+    u1, w1 = scipy.stats.mannwhitneyu( rate[5:10],rate[18:23],
+            alternative="two-sided" )
+    u2, w2 = scipy.stats.mannwhitneyu( rate[5:10],rate[31:36],
+            alternative="two-sided" )
+    u3, w3 = scipy.stats.mannwhitneyu( rate[5:10],rate[44:49],
+            alternative="two-sided" )
+
+    r1 = np.mean(rate[18:23])/ np.mean(rate[5:10])
+    r2 = np.mean(rate[31:36])/ np.mean(rate[5:10])
+    r3 = np.mean(rate[44:49])/ np.mean(rate[5:10])
+    print( "{} : w1={:12.4g}, w2={:12.4g}, w3={:12.4g} {}".format( panel, w1, w2, w3, title ) )
+
+    print( "{} : u1={:12.4g}, u2={:12.4g}, u3={:12.4g} {}".format( panel, u1, u2, u3, title ) )
+    print( "{} : r1={:12.4g}, r2={:12.4g}, r3={:12.4g} {}".format( panel, r1, r2, r3, title ) )
+
 def panelPQRS_ThetaSampleTrace( ax, dcell, panel, title ):
     print( "PANEL = ", panel )
     df = dcell.loc[(dcell['stimFreq'] == 100)]
-    time, rate = rippleSpikeRate( df, spikeCriterion=-0.03, windowSize = 0.005 )
+    time, rate, binned = rippleSpikeRate( df, spikeCriterion=-0.03, windowSize = 0.005 )
+    printMWUStats( title, panel, binned )
     ax.plot( time, rate, "b" )
     ax.scatter( [0.13, 0.26, 0.39],[-10,-10,-10], marker = '^', color='red')
     ax.spines['top'].set_visible(False)
