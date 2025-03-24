@@ -221,33 +221,34 @@ def panelCK_SampleTrace( ax, dcell, panel, title ):
     ax.set_xlim( -0.02, 0.82 )
     ax.text( 0.1, 1.05, title, fontsize = 14, transform=ax.transAxes )
 
-def printMWUStats( title, panel, rate ):
+def printThetaBurstStats( title, panel, rate ):
     ### Mann-Whitney U test to compare stats for bursts modulated by theta.
     # Treating each burst as a single sample. Each burst is 50 ms long,
     # starting at t=50ms and ending at t = 100 ms, then t = 180ms->230ms.
     # Sampling is 100Hz. So we have 5->10, 18->23, 31->36.
     # and 44->49
     # We compare each against the first burst.
-    u1, w1 = scipy.stats.mannwhitneyu( rate[5:10],rate[18:23],
+    u1, w1 = scipy.stats.mannwhitneyu( rate[6:10],rate[19:23],
             alternative="two-sided" )
-    u2, w2 = scipy.stats.mannwhitneyu( rate[5:10],rate[31:36],
+    u2, w2 = scipy.stats.mannwhitneyu( rate[6:10],rate[32:36],
             alternative="two-sided" )
-    u3, w3 = scipy.stats.mannwhitneyu( rate[5:10],rate[44:49],
+    u3, w3 = scipy.stats.mannwhitneyu( rate[6:10],rate[45:49],
             alternative="two-sided" )
 
-    r1 = np.mean(rate[18:23])/ np.mean(rate[5:10])
-    r2 = np.mean(rate[31:36])/ np.mean(rate[5:10])
-    r3 = np.mean(rate[44:49])/ np.mean(rate[5:10])
+    r1 = np.mean(rate[19:23])/ np.mean(rate[6:10])
+    r2 = np.mean(rate[32:36])/ np.mean(rate[6:10])
+    r3 = np.mean(rate[45:49])/ np.mean(rate[6:10])
     print( "{} : w1={:12.4g}, w2={:12.4g}, w3={:12.4g} {}".format( panel, w1, w2, w3, title ) )
 
     print( "{} : u1={:12.4g}, u2={:12.4g}, u3={:12.4g} {}".format( panel, u1, u2, u3, title ) )
     print( "{} : r1={:12.4g}, r2={:12.4g}, r3={:12.4g} {}".format( panel, r1, r2, r3, title ) )
+    print( rate[5:11], "\n", rate[18:24], "\n", rate[31:37], "\n", rate[44:50] )
 
 def panelPQRS_ThetaSampleTrace( ax, dcell, panel, title ):
     print( "PANEL = ", panel )
     df = dcell.loc[(dcell['stimFreq'] == 100)]
     time, rate, binned = rippleSpikeRate( df, spikeCriterion=-0.03, windowSize = 0.005 )
-    printMWUStats( title, panel, binned )
+    printThetaBurstStats( title, panel, binned )
     ax.plot( time, rate, "b" )
     ax.scatter( [0.13, 0.26, 0.39],[-10,-10,-10], marker = '^', color='red')
     ax.spines['top'].set_visible(False)
