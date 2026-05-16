@@ -24,7 +24,7 @@ Experimental data are available on Zenodo: https://doi.org/10.5281/zenodo.201794
 This is the code and data repository for this study, notably including the
 entire model specification, figure generation, and data analysis code.
 
-Large simulation data files (>5 MB) are available on Zenodo rather than in
+Large experimental data files (>5 MB) are available on Zenodo rather than in
 this repository. Scripts that require them expect the data files in the same
 directory as the plotting script.
 
@@ -49,6 +49,9 @@ Integrating Neuronal Data and Signaling Models.
 
 [HOSS](https://github.com/BhallaLab/HOSS) provides a set of methods for
 performing hierarchical optimization of signaling and other models.
+
+[Jardesigner](https://github.com/upibhalla/jardesigner) is three things: A JSON format for storing multiscale neuronal model definitions; a Python library for building models using this format, and a Javascript app for building and editing jardesigner models in a GUI. The Python library is included in the Zenodo repository with this paper. The working version of jardesigner on GITHUB is a8c8373.
+All the simulation scripts here use a model defined in the Jardesigner JSON format.
 
 
 ## CONTENTS
