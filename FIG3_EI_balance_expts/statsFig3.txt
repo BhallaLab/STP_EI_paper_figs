@@ -1,0 +1,6 @@
+Panel A  pulse 2 vs 1.0 (greater): p=0.0003
+Panel A  pulse 8 vs 1.0 (less):    p=0.0003
+Panel C  exp-sat fit: τ=2.115 ± 1.002 pulses,  a=1.677,  b=0.925
+Panel D  Exc slope: 0.253 ms/pulse  (p=0.0028)
+Panel D  Inh slope: 0.232 ms/pulse  (p=0.0000)
+Panel D  slope diff (Exc vs Inh): p=0.1230

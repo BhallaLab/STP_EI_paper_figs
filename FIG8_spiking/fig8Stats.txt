@@ -1,0 +1,58 @@
+Panel A LEN =  16000 16000 16000
+Panel B:  16 16
+PANEL =  C
+pC: w1=    0.003574, w2=    0.003958, w3=   2.112e-05 Reference
+C : r1=         2.1, r2=         2.5, r3=       3.286 Reference
+C : tau=  0.0065, p_decline=      0.5198 Reference
+loading:  SIMDATA/fig8_zeroIndices_32.h5
+PANEL =  D
+pD: w1=      0.6214, w2=      0.1808, w3=     0.06758 Dense stimulus
+D : r1=      0.9583, r2=         1.5, r3=       1.647 Dense stimulus
+D : tau= -0.4873, p_decline=   7.732e-05 Dense stimulus
+loading:  SIMDATA/fig8_zeroIndices_240.h5
+PANEL =  E
+pE: w1=   1.526e-05, w2=      0.1445, w3=   6.104e-05 Sparse stimulus
+E : r1=          -1, r2=           3, r3=          -1 Sparse stimulus
+E : tau=  0.0263, p_decline=      0.5763 Sparse stimulus
+loading:  SIMDATA/fig8_oddball_orig_0.h5
+PANEL =  F
+pF: w1=      0.1431, w2=     0.08978, w3=   9.537e-07 Oddball
+F : r1=        1.75, r2=         2.5, r3=          -1 Oddball
+F : tau= -0.4818, p_decline=   0.0001432 Oddball
+loading:  SIMDATA/fig8_gap_orig_0.h5
+PANEL =  G
+pG: w1=      0.9893, w2=      0.9648, w3=        0.25 Gap
+G : r1=        0.25, r2=      0.3333, r3=          -1 Gap
+G : tau= -0.4102, p_decline=    0.001296 Gap
+loading:  SIMDATA/fig8_modelName_BothPresyn90_noGlu_STP.g.h5
+PANEL =  H
+pH: w1=      0.1239, w2=      0.6549, w3=      0.3837 No STP in Glu
+H : r1=       1.104, r2=      0.9718, r3=       1.029 No STP in Glu
+H : tau=  0.2358, p_decline=      0.9702 No STP in Glu
+loading:  SIMDATA/fig8_modelName_BothPresyn90_noGABA_STP.g.h5
+PANEL =  I
+pI: w1=     0.05766, w2=    0.003906, w3=      0.1445 No STP in GABA
+I : r1=       2.333, r2=          -1, r3=           3 No STP in GABA
+I : tau= -0.4653, p_decline=   0.0003124 No STP in GABA
+loading:  SIMDATA/fig8_uniform_orig_0.h5
+PANEL =  J
+pJ: w1=      0.9988, w2=      0.9893, w3=      0.0625 Uniform pattern
+J : r1=         0.3, r2=        0.25, r3=          -1 Uniform pattern
+J : tau= -0.5341, p_decline=   3.581e-05 Uniform pattern
+loading:  SIMDATA/fig8_random_orig_0.h5
+PANEL =  K
+pK: w1=       0.459, w2=      0.8853, w3=      0.7597 Random pattern
+K : r1=       1.043, r2=         0.7, r3=         0.8 Random pattern
+K : tau= -0.3136, p_decline=    0.007909 Random pattern
+PANEL = L: spk freq dep
+Panel L p-values:  ['8: 0.0259', '20: 0.0632', '50: 1.89e-08', '80: 1.28e-09', '100: 1.64e-05', '150: 0.0211']
+PANEL = M: Theta schematic
+loading:  SIMDATA/fig8_theta_orig_0.h5
+PANEL =  N
+N : w1=      0.8023, w2=      0.8988, w3=     0.04239 Theta burst mismatch
+N : r1=        1.04, r2=       0.976, r3=       0.752 Theta burst mismatch
+loading:  SIMDATA/fig8_theta_uniform_orig_0.h5
+PANEL =  O
+O : w1=   1.919e-07, w2=   3.143e-07, w3=    6.68e-21 Theta burst uniform
+O : r1=        0.44, r2=       0.448, r3=       0.144 Theta burst uniform
+

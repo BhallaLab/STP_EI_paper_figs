@@ -1,0 +1,80 @@
+
+Concentration units: uM
+Time units: sec
+Default Volume (m^3) : 2.618e-19
+
+
+
+Equations for group /kinetics
+
+-------------------------------------------
+
+
+Equations for group /kinetics/GABA
+Reactions for group /kinetics/GABA
+Reaction	kf	kb	Kf	Kb
+2  Ca <===> 2  Ca_ext	 0.13471 #^-1.s^-1 	 0.044059 #^-1.s^-1	 21.238 uM^-1.s^-1 	 6.9463 uM^-1.s^-1
+GABA <===> 2  Ca + vesicle_pool	 38544 s^-1 	 0 #^-2.s^-1	 38544 s^-1 	 0 uM^-2.s^-1
+2  Ca + Docked <===> GABA	 2.1007e-05 #^-2.s^-1 	 0 s^-1	 0.52216 uM^-2.s^-1 	 0 s^-1
+
+Pools for group /kinetics/GABA
+name	InitialConc	buffered	Volume
+Ca	0.080001 uM	0	0.26277 fl
+Ca_ext	0.080001 uM	1	0.26277 fl
+vesicle_pool	3.1699 uM	1	0.26277 fl
+Docked	0.10148 uM	1	0.26277 fl
+GABA	0 uM	0	0.26277 fl
+
+
+-------------------------------------------
+
+
+Equations for group /kinetics/glu
+Reactions for group /kinetics/glu
+Reaction	kf	kb	Kf	Kb
+2  Ca <===> 2  Ca_ext	 0.29886 #^-1.s^-1 	 0.10078 #^-1.s^-1	 47.118 uM^-1.s^-1 	 15.889 uM^-1.s^-1
+glu <===> 2  Ca + vesicle_pool	 74957 s^-1 	 0 #^-2.s^-1	 74957 s^-1 	 0 uM^-2.s^-1
+2  Ca + Docked <===> glu	 2.5241e-05 #^-2.s^-1 	 0 s^-1	 0.62741 uM^-2.s^-1 	 0 s^-1
+
+Pools for group /kinetics/glu
+name	InitialConc	buffered	Volume
+Ca	0.080001 uM	0	0.26277 fl
+Ca_ext	0.080001 uM	1	0.26277 fl
+vesicle_pool	0.872 uM	1	0.26277 fl
+glu	0 uM	0	0.26277 fl
+Docked	0.15223 uM	1	0.26277 fl
+
+
+-------------------------------------------
+-------------------------------------------
+-------------------------------------------
+
+Same data, sorting by data type:
+
+
+
+Equations for group /##[]
+Reactions for group /##[]
+Reaction	kf	kb	Kf	Kb
+2  Ca <===> 2  Ca_ext	 0.13471 #^-1.s^-1 	 0.044059 #^-1.s^-1	 21.238 uM^-1.s^-1 	 6.9463 uM^-1.s^-1
+GABA <===> 2  Ca + vesicle_pool	 38544 s^-1 	 0 #^-2.s^-1	 38544 s^-1 	 0 uM^-2.s^-1
+2  Ca + Docked <===> GABA	 2.1007e-05 #^-2.s^-1 	 0 s^-1	 0.52216 uM^-2.s^-1 	 0 s^-1
+2  Ca <===> 2  Ca_ext	 0.29886 #^-1.s^-1 	 0.10078 #^-1.s^-1	 47.118 uM^-1.s^-1 	 15.889 uM^-1.s^-1
+glu <===> 2  Ca + vesicle_pool	 74957 s^-1 	 0 #^-2.s^-1	 74957 s^-1 	 0 uM^-2.s^-1
+2  Ca + Docked <===> glu	 2.5241e-05 #^-2.s^-1 	 0 s^-1	 0.62741 uM^-2.s^-1 	 0 s^-1
+
+Pools for group /##[]
+name	InitialConc	buffered	Volume
+Ca	0.080001 uM	0	0.26277 fl
+Ca_ext	0.080001 uM	1	0.26277 fl
+vesicle_pool	3.1699 uM	1	0.26277 fl
+Docked	0.10148 uM	1	0.26277 fl
+GABA	0 uM	0	0.26277 fl
+Ca	0.080001 uM	0	0.26277 fl
+Ca_ext	0.080001 uM	1	0.26277 fl
+vesicle_pool	0.872 uM	1	0.26277 fl
+glu	0 uM	0	0.26277 fl
+Docked	0.15223 uM	1	0.26277 fl
+
+
+-------------------------------------------

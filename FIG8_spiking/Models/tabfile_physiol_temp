@@ -1,0 +1,116 @@
+
+Concentration units: uM
+Time units: sec
+Default Volume (m^3) : 2.618e-19
+
+
+
+Data for group /kinetics
+
+-------------------------------------------
+
+
+Data for group /kinetics/GABA
+Reactions for group /kinetics/GABA
+name kf kb Kf Kb Kd tau sub_order prd_order
+remove_Ca 0.18838 0.061652 29.7 9.7201 3.0555 3.9995 1 1
+remove 53962 0 53962 0 inf 1.8532e-05 0 2
+replenish_vesicle 3.73 3.73 3.73 3.73 1 0.13405 0 0
+vesicle_release 2.9409e-05 0 0.73101 0 0 34003 2 0
+Ca_bind_RR 9.0117e-05 4.69 2.24 4.69 1.447 0.21322 2 0
+docking 478.2 0 478.2 0 inf 0.0020912 0 2
+undocking 470.2 0 470.2 0 inf 0.0021268 0 0
+Ca_bind_buffer 6.5697e-08 1400 470.2 1400 1.3136 0.00071429 4 0
+
+Pools for group /kinetics/GABA
+name	InitialConc	buffered	Volume
+Ca	0.080001 uM	0	0.26277 fl
+Ca_ext	0.080001 uM	1	0.26277 fl
+RR_pool	3 uM	0	0.26277 fl
+vesicle_pool	3.1699 uM	1	0.26277 fl
+Docked	0 uM	0	0.26277 fl
+Ca_RR	0 uM	0	0.26277 fl
+GABA	0 uM	0	0.26277 fl
+Buffer	3.4727 uM	0	0.26277 fl
+Ca4.Buffer	0 uM	0	0.26277 fl
+
+
+-------------------------------------------
+
+
+Data for group /kinetics/glu
+Reactions for group /kinetics/glu
+name kf kb Kf Kb Kd tau sub_order prd_order
+remove_Ca 0.41862 0.14081 66 22.2 2.973 1.7875 1 1
+remove 1.0494e+05 0 1.0494e+05 0 inf 9.5293e-06 0 2
+replenish_vesicle 3.66 3.66 3.66 3.66 1 0.13661 0 0
+vesicle_release 3.5323e-05 0 0.87801 0 0 28310 2 0
+Ca_bind_RR 5.6323e-05 0.25 1.4 0.25 0.42258 3.9991 2 0
+docking 2780.5 0 2780.5 0 inf 0.00035965 0 2
+undocking 178.8 0 178.8 0 inf 0.0055928 0 0
+Ca_bind_buffer 1.4955e-07 1400 178.8 1400 1.6728 0.00071429 4 0
+
+Pools for group /kinetics/glu
+name	InitialConc	buffered	Volume
+Ca	0.080001 uM	0	0.26277 fl
+Ca_ext	0.080001 uM	1	0.26277 fl
+RR_pool	0.3 uM	0	0.26277 fl
+vesicle_pool	0.872 uM	1	0.26277 fl
+glu	0 uM	0	0.26277 fl
+Docked	0 uM	0	0.26277 fl
+Ca_RR	0 uM	0	0.26277 fl
+Buffer	4.0953 uM	0	0.26277 fl
+Ca4.Buffer	0 uM	0	0.26277 fl
+
+
+-------------------------------------------
+-------------------------------------------
+-------------------------------------------
+
+Same data, sorting by data type:
+
+
+
+Data for group /##[]
+Reactions for group /##[]
+name kf kb Kf Kb Kd tau sub_order prd_order
+remove_Ca 0.18838 0.061652 29.7 9.7201 3.0555 3.9995 1 1
+remove 53962 0 53962 0 inf 1.8532e-05 0 2
+replenish_vesicle 3.73 3.73 3.73 3.73 1 0.13405 0 0
+vesicle_release 2.9409e-05 0 0.73101 0 0 34003 2 0
+Ca_bind_RR 9.0117e-05 4.69 2.24 4.69 1.447 0.21322 2 0
+docking 478.2 0 478.2 0 inf 0.0020912 0 2
+undocking 470.2 0 470.2 0 inf 0.0021268 0 0
+Ca_bind_buffer 6.5697e-08 1400 470.2 1400 1.3136 0.00071429 4 0
+remove_Ca 0.41862 0.14081 66 22.2 2.973 1.7875 1 1
+remove 1.0494e+05 0 1.0494e+05 0 inf 9.5293e-06 0 2
+replenish_vesicle 3.66 3.66 3.66 3.66 1 0.13661 0 0
+vesicle_release 3.5323e-05 0 0.87801 0 0 28310 2 0
+Ca_bind_RR 5.6323e-05 0.25 1.4 0.25 0.42258 3.9991 2 0
+docking 2780.5 0 2780.5 0 inf 0.00035965 0 2
+undocking 178.8 0 178.8 0 inf 0.0055928 0 0
+Ca_bind_buffer 1.4955e-07 1400 178.8 1400 1.6728 0.00071429 4 0
+
+Pools for group /##[]
+name	InitialConc	buffered	Volume
+Ca	0.080001 uM	0	0.26277 fl
+Ca_ext	0.080001 uM	1	0.26277 fl
+RR_pool	3 uM	0	0.26277 fl
+vesicle_pool	3.1699 uM	1	0.26277 fl
+Docked	0 uM	0	0.26277 fl
+Ca_RR	0 uM	0	0.26277 fl
+GABA	0 uM	0	0.26277 fl
+Buffer	3.4727 uM	0	0.26277 fl
+Ca4.Buffer	0 uM	0	0.26277 fl
+Ca	0.080001 uM	0	0.26277 fl
+Ca_ext	0.080001 uM	1	0.26277 fl
+RR_pool	0.3 uM	0	0.26277 fl
+vesicle_pool	0.872 uM	1	0.26277 fl
+glu	0 uM	0	0.26277 fl
+Docked	0 uM	0	0.26277 fl
+Ca_RR	0 uM	0	0.26277 fl
+Buffer	4.0953 uM	0	0.26277 fl
+Ca4.Buffer	0 uM	0	0.26277 fl
+
+
+-------------------------------------------

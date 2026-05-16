@@ -7,3 +7,17 @@
 *pycache*
 *.pyc
 *log*.txt
+
+!SUPP_TABLES_PARAMS/*.pdf
+
+# Small h5 files to include
+!FIG5_burst_EPSP/fig5burst_orig_0.h5
+!FIG7_Mismatch_Heatmaps/fig7panelAB_orig_0.h5
+!FIG7_Mismatch_Heatmaps/fig7panelC_orig_0.h5
+
+# Large simulation data files (available on Zenodo)
+fig6poisson_orig_0.h5
+fig8L_spk_freq_sweep_orig_0.h5
+FIG8_spiking/SIMDATA/
+Asopa_Bhalla_eLife2026_Data/
+__pycache__/

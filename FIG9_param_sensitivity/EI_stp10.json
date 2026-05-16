@@ -1,0 +1,167 @@
+{
+  "filetype": "jardesigner",
+  "version": "1.0",
+  "useGssa": true,
+  "elecPlotDt": 0.00005,
+  "chemDt": 0.0005,
+  "chemPlotDt": 0.0005,
+  "diffDt": 0.0005,
+  "funcDt": 0.0005,
+  "cellProto": {
+    "type": "ballAndStick",
+    "somaDia": 0.00001,
+    "somaLen": 0.00001,
+    "dendDia": 0.000002,
+    "dendLen": 0.0002,
+    "dendNumSeg": 1
+  },
+  "passiveDistrib": [
+    {
+      "path": "#[ISA=CompartmentBase]",
+      "Em": -0.065,
+      "initVm": -0.065,
+      "CM": 0.01,
+      "RM": 1,
+      "RA": 1
+    }
+  ],
+  "spineProto": [
+    {
+      "type": "builtin",
+      "source": "makeActiveSpine()",
+      "name": "spine",
+      "shaftDia": 2e-7,
+      "shaftLen": 0.000001,
+      "headDia": 5e-7,
+      "headLen": 5e-7,
+      "amparGbar": 200,
+      "nmdarGbar": 80
+    }
+  ],
+  "spineDistrib": [
+    {
+      "proto": "spine",
+      "path": "dend#",
+      "spacing": 0.000002,
+      "minSpacing": -0.000001,
+      "sizeScale": 1,
+      "sizeSdev": 0.5,
+      "angle": 0,
+      "angleSdev": 6.2832,
+      "randSeed": 1234
+    }
+  ],
+  "chanProto": [
+    {
+      "type": "builtin",
+      "source": "make_Na()",
+      "name": "Na"
+    },
+    {
+      "type": "builtin",
+      "source": "make_K_DR()",
+      "name": "K"
+    },
+    {
+      "type": "builtin",
+      "source": "make_GABAR()",
+      "name": "GABAR"
+    }
+  ],
+  "chanDistrib": [
+    {
+      "proto": "Na",
+      "path": "soma",
+      "Gbar": 6
+    },
+    {
+      "proto": "K",
+      "path": "soma",
+      "Gbar": 3.5
+    },
+    {
+      "proto": "GABAR",
+      "path": "dend#",
+      "Gbar": 10
+    }
+  ],
+  "chemProto": [
+    {
+      "type": "kkit",
+      "source": "Models/BothPresyn86.g",
+      "name": "PRESYN"
+    }
+  ],
+  "chemDistrib": [
+    {
+      "proto": "glu",
+      "path": "head#",
+      "type": "presyn_spine",
+      "radiusByPsd": 1,
+      "radiusByPsdSdev": 0
+    },
+    {
+      "proto": "GABA",
+      "path": "dend#",
+      "type": "presyn_dend",
+      "radius": 0.5e-6,
+      "radiusSdev": 0,
+      "spacing": 1e-6
+    }
+  ],
+  "adaptors": [
+    {
+      "source": "glu/glu",
+      "sourceField": "n",
+      "dest": "AMPAR",
+      "destField": "activation",
+      "baseline": 0,
+      "slope": 1500
+    },
+    {
+      "source": "GABA/GABA",
+      "sourceField": "n",
+      "dest": "GABAR",
+      "destField": "activation",
+      "baseline": 0,
+      "slope": 1500
+    }
+  ],
+  "stims": [],
+  "plots": [
+    {
+      "path": "soma",
+      "field": "Vm",
+      "title": "Membrane potential"
+    },
+    {
+      "path": "head#",
+      "field": "Ik",
+      "relpath": "AMPAR",
+      "title": "ampar current"
+    },
+    {
+      "path": "dend#",
+      "field": "Ik",
+      "relpath": "GABAR",
+      "title": "GABA current"
+    },
+    {
+      "path": "head#",
+      "field": "n",
+      "relpath": "glu/Ca",
+      "title": "glu_presyn_Ca"
+    },
+    {
+      "path": "dend#",
+      "field": "n",
+      "relpath": "GABA/Ca",
+      "title": "GABA_presyn_Ca"
+    }
+  ],
+  "fileinfo": {
+    "creator": "Upi Bhalla",
+    "licence": "CC BY",
+    "modelNotes": "EI and STP model for Aditya and Bhalla, 2025"
+  }
+}

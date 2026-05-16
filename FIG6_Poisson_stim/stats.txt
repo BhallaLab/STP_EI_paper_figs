@@ -1,0 +1,84 @@
+Panel G: EPSP amplitude distribution — per-cell lognormal comparison
+  5sq — lognormal mu (log-mean):
+    mu per cell: cell4041=-1.09  cell3611=-0.0092  cell521=-0.137
+    expt range [-1.09, -0.0092], mean=-0.412±0.482
+    sim=-0.536;  within expt range: YES
+
+  5sq — lognormal sigma (log-std):
+    sigma per cell: cell4041=1.39  cell3611=1.18  cell521=1.23
+    expt range [1.18, 1.39], mean=1.27±0.0895
+    sim=1.23;  within expt range: YES
+
+  15sq — lognormal mu (log-mean):
+    mu per cell: cell4041=-0.139  cell3611=0.599  cell521=0.847
+    expt range [-0.139, 0.847], mean=0.436±0.419
+    sim=0.392;  within expt range: YES
+
+  15sq — lognormal sigma (log-std):
+    sigma per cell: cell4041=1.18  cell3611=0.957  cell521=0.881
+    expt range [0.881, 1.18], mean=1.01±0.127
+    sim=0.99;  within expt range: YES
+
+
+Panel D: Response probability (t>2s) — per-cell comparison
+  5sq:
+    mean prob t>2s (%) per cell: cell4041=28.9  cell3611=64.5  cell521=60.8
+    expt range [28.9, 64.5], mean=51.4±16
+    sim=58.7;  within expt range: YES
+
+  15sq:
+    mean prob t>2s (%) per cell: cell4041=61.9  cell3611=80.4  cell521=90.2
+    expt range [61.9, 90.2], mean=77.5±11.7
+    sim=86.9;  within expt range: YES
+
+
+Panel E: EPSP vs time — per-cell comparison
+  5sq — initial dip slope (t<=1.8s, absolute):
+    slope (/s) per cell: cell4041=-1.78  cell3611=-1.6  cell521=0.564
+    expt range [-1.78, 0.564], mean=-0.939±1.07
+    sim=0.0328;  within expt range: YES
+
+  5sq — mean absolute amplitude (t>2s):
+    abs amp (mV, t>2s) per cell: cell4041=0.395  cell3611=1.12  cell521=1.15
+    expt range [0.395, 1.15], mean=0.888±0.349
+    sim=0.814;  within expt range: YES
+
+  15sq — initial dip slope (t<=1.8s, absolute):
+    slope (/s) per cell: cell4041=-3.07  cell3611=-1.31  cell521=0.329
+    expt range [-3.07, 0.329], mean=-1.35±1.39
+    sim=-0.124;  within expt range: YES
+
+  15sq — mean absolute amplitude (t>2s):
+    abs amp (mV, t>2s) per cell: cell4041=0.994  cell3611=2.07  cell521=2.88
+    expt range [0.994, 2.88], mean=1.98±0.773
+    sim=1.91;  within expt range: YES
+
+
+Panel F: ISI decay tau — per-cell comparison
+  5sq:
+    tau (s) per cell: cell4041=0.000337  cell3611=0.0176  cell521=0.0141
+    expt range [0.000337, 0.0176], mean=0.0107±0.00746
+    sim=0.0346;  within expt range: NO
+
+  15sq:
+    tau (s) per cell: cell4041=0.00804  cell3611=933  cell521=0.0285
+    expt range [0.00804, 933], mean=311±440
+    sim=0.0499;  within expt range: YES
+
+
+Panel C: PSD — per-cell vs simulation comparison
+  5sq: cosine(sim PSD, expt mean PSD) = 0.9621
+  5sq: cosine(each expt cell PSD, expt mean PSD) — range of 'typical' similarity:
+    cell 4041: 0.9325
+    cell 3611: 0.9798
+    cell 521: 0.9585
+    cell 4001: 0.1681
+  5sq: expt cell range [0.1681, 0.9798];  sim within range: YES
+  15sq: cosine(sim PSD, expt mean PSD) = 0.9574
+  15sq: cosine(each expt cell PSD, expt mean PSD) — range of 'typical' similarity:
+    cell 4041: 0.9260
+    cell 3611: 0.9897
+    cell 521: 0.9644
+    cell 4001: 0.0983
+  15sq: expt cell range [0.0983, 0.9897];  sim within range: YES
+  (cosine similarity: 1 = identical shape, lower = diverging spectral profile)

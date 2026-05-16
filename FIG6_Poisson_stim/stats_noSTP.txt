@@ -1,0 +1,16 @@
+=== Panel A: EPSP vs Time ===
+                                    Expt range               Reference Sim                      No STP                Active NMDAR
+----------------------------------------------------------------------------------------------------------------------------------
+5sq   t>2s mean (mV)             [0.395, 1.15]         0.814 ± 0.0146  YES          2.88 ± 0.0597  NO          0.817 ± 0.0148  YES
+15sq  t>2s mean (mV)             [0.994, 2.88]           1.9 ± 0.0297  YES          6.65 ± 0.0751  NO           1.91 ± 0.0278  YES
+5sq   slope (/s)                [-1.78, 0.564]        0.0365 ±   0.11  YES          0.78 ±  0.201  NO         0.0452 ±  0.111  YES
+15sq  slope (/s)                [-3.07, 0.329]        -0.134 ±  0.223  YES          1.88 ±  0.333  NO         -0.113 ±  0.224  YES
+
+=== Panel B: EPSP vs ISI ===
+                                    Expt range               Reference Sim                      No STP                Active NMDAR
+----------------------------------------------------------------------------------------------------------------------------------
+/home/bhalla/homework/Aditya/2026/may04_SuppFig6_noSTP/plotFig6_suppl2_3.py:417: OptimizeWarning: Covariance of the parameters could not be estimated
+  popt, pcov = optimize.curve_fit(exponential_decay, time_all, Y_all, p0=[y0_guess, tau_guess, y1_guess], maxfev=5000)
+5sq   ISI tau (s)           [0.000337, 0.0176]        0.0343 ±0.00694  NO         0.0587 ±0.00984  NO         0.0351 ±0.00717  NO 
+15sq  ISI tau (s)          [0.00804, 1.07e+03]        0.0497 ± 0.0125  YES         0.117 ± 0.0347  YES        0.0493 ± 0.0123  YES
+

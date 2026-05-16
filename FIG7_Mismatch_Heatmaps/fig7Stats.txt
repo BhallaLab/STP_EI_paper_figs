@@ -1,0 +1,39 @@
+EI1, cell0, freq8, sweep0, seq0, 
+EI2, cell0, freq20, sweep0, seq0, 
+EI3, cell0, freq50, sweep0, seq0, 
+READING real data
+Plotting heatmap for real data
+LENS =  10 10 10 10
+transition data frame shape =  (69, 10)
+    numSq  freq  transition                                              delta      pval
+39      5    50           0  [0.40539329631685006, 0.3822610839761981, 0.60...  0.278320
+40      5    50           1  [0.5137985531880884, 0.20677421159380657, 0.83...  0.312500
+41      5    50           2  [0.8053053228089524, 0.35046851197895595, -0.2...  0.687500
+51     15    50           0  [1.0302484595069419, 0.16986427643927612, -0.9...  0.999068
+52     15    50           1  [0.721089928941981, 1.8422439408888573, 0.2214...  0.278057
+53     15    50           2  [0.8676542275013761, 1.8333509358871518, 0.493...  0.013114
+HEAT =  5 8 2.0 12 1 iters
+HEAT =  5 20 1.0 12 1 iters
+HEAT =  5 50 0.0 6 1 iters
+HEAT =  15 8 2.0 12 1 iters
+HEAT =  15 20 2.0 15 1 iters
+HEAT =  15 50 3.0 12 1 iters
+Plotting heatmap for sim data, 0 ms jitter
+LENS =  10 24 24 10
+transition data frame shape =  (108, 10)
+HEAT =  5 8 2.8125 18 16 iters
+HEAT =  5 20 4.5 18 16 iters
+HEAT =  5 50 11.0 18 16 iters
+HEAT =  15 8 1.375 18 16 iters
+HEAT =  15 20 0.0625 18 16 iters
+HEAT =  15 50 2.0 18 16 iters
+Plotting heatmap for sim data, jitter = 6ms
+LENS =  10 24 24 10
+transition data frame shape =  (108, 10)
+HEAT =  5 8 3.1875 18 16 iters
+HEAT =  5 20 6.0625 18 16 iters
+HEAT =  5 50 3.3125 18 16 iters
+HEAT =  15 8 2.25 18 16 iters
+HEAT =  15 20 3.25 18 16 iters
+HEAT =  15 50 3.125 18 16 iters
+

@@ -1,0 +1,59 @@
+CELLID =  [1 2 3 4 5 6]
+freq =  [ 8 20 50]
+sweep =  [ 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23
+ 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47
+ 48 49]
+./BARDATA/spk_orig_0.h5.8: miny = [4, 4, 3], maxy = [4, 4, 3]
+./BARDATA/spk_orig_0.h5.8: miny = [2, 4, 5], maxy = [0, 9, 6]
+./BARDATA/spk_orig_0.h5.8: miny = [1, 6, 5], maxy = [4, 9, 0]
+./BARDATA/spk_orig_0.h5.8: miny = [7, 3, 7], maxy = [6, 11, 5]
+./BARDATA/spk_orig_0.h5.8: miny = [15, 3, 11], maxy = [6, 7, 5]
+./BARDATA/spk_orig_0.h5.8: miny = [4, 2, 0], maxy = [5, 2, 3]
+./BARDATA/spk_orig_0.h5.20: miny = [2, 3, 0], maxy = [6, 3, 2]
+./BARDATA/spk_orig_0.h5.20: miny = [3, 2, 4], maxy = [4, 4, 0]
+./BARDATA/spk_orig_0.h5.20: miny = [0, 4, 2], maxy = [11, 8, 3]
+./BARDATA/spk_orig_0.h5.20: miny = [3, 5, 4], maxy = [4, 7, 5]
+./BARDATA/spk_orig_0.h5.20: miny = [13, 3, 4], maxy = [9, 4, 2]
+./BARDATA/spk_orig_0.h5.20: miny = [3, 3, 4], maxy = [5, 6, 2]
+./BARDATA/spk_orig_0.h5.50: miny = [2, 11, 6], maxy = [13, 8, 4]
+./BARDATA/spk_orig_0.h5.50: miny = [3, 8, 6], maxy = [8, 8, 1]
+./BARDATA/spk_orig_0.h5.50: miny = [6, 11, 7], maxy = [11, 12, 3]
+./BARDATA/spk_orig_0.h5.50: miny = [11, 20, 4], maxy = [13, 12, 4]
+./BARDATA/spk_orig_0.h5.50: miny = [9, 10, 9], maxy = [19, 5, 6]
+./BARDATA/spk_orig_0.h5.50: miny = [1, 4, 2], maxy = [15, 5, 13]
+./BARDATA/spk_orig_0.h5.8: miny = [4, 4, 3], maxy = [4, 4, 3]
+./BARDATA/spk_orig_0.h5.8: miny = [2, 4, 5], maxy = [0, 9, 6]
+./BARDATA/spk_orig_0.h5.8: miny = [1, 6, 5], maxy = [4, 9, 0]
+./BARDATA/spk_orig_0.h5.8: miny = [7, 3, 7], maxy = [6, 11, 5]
+./BARDATA/spk_orig_0.h5.8: miny = [15, 3, 11], maxy = [6, 7, 5]
+./BARDATA/spk_orig_0.h5.8: miny = [4, 2, 0], maxy = [5, 2, 3]
+./BARDATA/spk_orig_0.h5.20: miny = [2, 3, 0], maxy = [6, 3, 2]
+./BARDATA/spk_orig_0.h5.20: miny = [3, 2, 4], maxy = [4, 4, 0]
+./BARDATA/spk_orig_0.h5.20: miny = [0, 4, 2], maxy = [11, 8, 3]
+./BARDATA/spk_orig_0.h5.20: miny = [3, 5, 4], maxy = [4, 7, 5]
+./BARDATA/spk_orig_0.h5.20: miny = [13, 3, 4], maxy = [9, 4, 2]
+./BARDATA/spk_orig_0.h5.20: miny = [3, 3, 4], maxy = [5, 6, 2]
+./BARDATA/spk_orig_0.h5.50: miny = [2, 11, 6], maxy = [13, 8, 4]
+./BARDATA/spk_orig_0.h5.50: miny = [3, 8, 6], maxy = [8, 8, 1]
+./BARDATA/spk_orig_0.h5.50: miny = [6, 11, 7], maxy = [11, 12, 3]
+./BARDATA/spk_orig_0.h5.50: miny = [11, 20, 4], maxy = [13, 12, 4]
+./BARDATA/spk_orig_0.h5.50: miny = [9, 10, 9], maxy = [19, 5, 6]
+./BARDATA/spk_orig_0.h5.50: miny = [1, 4, 2], maxy = [15, 5, 13]
+
+--- Statistical Results (Welch's T-Test) ---
+Group: stoch_orig_0.h5      | T-stat: -2.3279 | P-value: 2.1855e-02
+Group: noSTP_orig_0.h5      | T-stat: -6.8702 | P-value: 1.5831e-09
+Group: temp37deg_orig_0.h5  | T-stat: 2.8830 | P-value: 4.8203e-03
+Group: spk_orig_0.h5        | T-stat: 0.0067 | P-value: 9.9470e-01
+stoch_orig_0.h5     : mean_val=0.028, ref_mean=0.061
+noSTP_orig_0.h5     : mean_val=-0.005, ref_mean=0.061
+temp37deg_orig_0.h5 : mean_val=0.064, ref_mean=0.061
+spk_orig_0.h5       : mean_val=0.017, ref_mean=0.061
+stoch_orig_0.h5     : mean_val=0.017, ref_mean=0.081
+noSTP_orig_0.h5     : mean_val=-0.032, ref_mean=0.081
+temp37deg_orig_0.h5 : mean_val=0.127, ref_mean=0.081
+spk_orig_0.h5       : mean_val=0.156, ref_mean=0.081
+stoch_orig_0.h5     : mean_val=0.054, ref_mean=0.109
+noSTP_orig_0.h5     : mean_val=-0.037, ref_mean=0.109
+temp37deg_orig_0.h5 : mean_val=0.261, ref_mean=0.109
+spk_orig_0.h5       : mean_val=0.079, ref_mean=0.109
