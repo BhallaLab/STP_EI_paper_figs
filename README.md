@@ -25,8 +25,10 @@ This is the code and data repository for this study, notably including the
 entire model specification, figure generation, and data analysis code.
 
 Large experimental data files (>5 MB) are available on Zenodo rather than in
-this repository. Scripts that require them expect the data files in the same
-directory as the plotting script.
+this repository. Scripts that require them expect the data files in relative
+subdirectories to the plotting script, and these relative paths may need 
+editing to line up with the data files downloaded from Zenodo. The data
+filenames are the same.
 
 ## Dependencies
 
